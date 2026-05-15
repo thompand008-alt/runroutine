@@ -666,27 +666,76 @@
       letter-spacing: 0;
       font-weight: 500;
     }
-    .chart-svg {
-      width: 100%;
+    /* HTML-div bar charts (replaces SVG charts since Alpine x-for doesn't work cleanly inside SVG) */
+    .bar-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 4px;
       height: 140px;
-      display: block;
+      position: relative;
+      padding: 0 2px;
+      /* Subtle Y-axis gridlines at 25%, 50%, 75%, 100% */
+      background-image: linear-gradient(
+        to top,
+        transparent 0%,
+        transparent 24.7%, var(--border) 25%, transparent 25.3%,
+        transparent 49.7%, var(--border) 50%, transparent 50.3%,
+        transparent 74.7%, var(--border) 75%, transparent 75.3%,
+        transparent 99.7%, var(--border) 100%, transparent 100%
+      );
+      border-bottom: 1px solid var(--border);
     }
-    .chart-svg .bar-run { fill: var(--run); }
-    .chart-svg .bar-run.current { fill: var(--run-hi); }
-    .chart-svg .bar-ride { fill: var(--ride); }
-    .chart-svg .bar-ride.current { fill: var(--ride-hi); }
-    .chart-svg .bar-empty { fill: var(--surface-3); }
-    .chart-svg .chart-label {
-      fill: var(--text-3);
-      font-size: 10px;
-      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    .bar-col {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      height: 100%;
+      min-width: 0;
+      position: relative;
+    }
+    .bar-value {
+      font-size: 9px;
+      color: var(--text-3);
       font-variant-numeric: tabular-nums;
-      text-anchor: middle;
+      font-weight: 600;
+      line-height: 1;
+      margin-bottom: 3px;
+      height: 10px;
     }
-    .chart-svg .chart-baseline {
-      stroke: var(--border);
-      stroke-width: 1;
+    .bar-fill {
+      width: 100%;
+      max-width: 28px;
+      border-radius: 4px 4px 0 0;
+      min-height: 2px;
+      transition: height 0.3s ease;
     }
+    /* Color application based on Run/Ride context */
+    .bar-chart.run .bar-fill { background: var(--run); }
+    .bar-chart.run .bar-fill.current { background: var(--run-hi); box-shadow: 0 0 0 1px var(--run-hi); }
+    .bar-chart.ride .bar-fill { background: var(--ride); }
+    .bar-chart.ride .bar-fill.current { background: var(--ride-hi); box-shadow: 0 0 0 1px var(--ride-hi); }
+    .bar-fill.empty { background: var(--surface-3) !important; opacity: 0.4; box-shadow: none !important; }
+
+    /* 7-day chart: extra padding for day-of-week labels below */
+    .chart-card-7d { padding-bottom: 8px; }
+    .day-labels {
+      display: flex;
+      gap: 4px;
+      padding: 6px 2px 0;
+      margin-top: 4px;
+      border-top: 0;
+    }
+    .day-labels .day-label {
+      flex: 1;
+      text-align: center;
+      font-size: 10px;
+      color: var(--text-3);
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .day-labels .day-label.today { color: var(--text); }
 
     .activity-row {
       display: flex;
@@ -982,53 +1031,45 @@
                 <div class="ytd-sub" x-text="ytdCount() + ' ' + (cardio.activeType === 'Run' ? 'runs' : 'rides')"></div>
               </div>
 
-              <!-- 12-week chart -->
+              <!-- 12-week chart (HTML divs) -->
               <div class="chart-card">
                 <div class="chart-title">
                   <span>Last 12 Weeks</span>
                   <span class="chart-total" x-text="fmtMiles(twelveWeekData().reduce((a,b)=>a+b,0)) + ' mi total'"></span>
                 </div>
-                <svg class="chart-svg" :viewBox="'0 0 360 160'" preserveAspectRatio="none">
-                  <line class="chart-baseline" x1="0" y1="140" x2="360" y2="140"></line>
+                <div class="bar-chart" :class="cardio.activeType.toLowerCase()">
                   <template x-for="(val, i) in twelveWeekData()" :key="i">
-                    <g>
-                      <rect
-                        :class="(cardio.activeType === 'Run' ? 'bar-run' : 'bar-ride') + (i === 11 ? ' current' : '')"
-                        :x="6 + i * 29"
-                        :y="140 - Math.max(2, (val / Math.max(1, Math.max(...twelveWeekData()))) * 120)"
-                        width="22"
-                        :height="Math.max(2, (val / Math.max(1, Math.max(...twelveWeekData()))) * 120)"
-                        rx="3" ry="3">
-                      </rect>
-                      <text class="chart-label" :x="17 + i * 29" y="155" x-text="val > 0 ? fmtMiles(val) : ''"></text>
-                    </g>
+                    <div class="bar-col">
+                      <span class="bar-value" x-text="val > 0 ? fmtMiles(val) : ''"></span>
+                      <div class="bar-fill"
+                           :class="{ current: i === 11, empty: val === 0 }"
+                           :style="'height: ' + (val > 0 ? Math.max(2, (val / Math.max(1, Math.max(...twelveWeekData()))) * 92) : 2) + '%'"></div>
+                    </div>
                   </template>
-                </svg>
+                </div>
               </div>
 
-              <!-- This week's daily chart -->
-              <div class="chart-card">
+              <!-- This week's daily chart (HTML divs) -->
+              <div class="chart-card chart-card-7d">
                 <div class="chart-title">
                   <span>This Week (Mon–Sun)</span>
                   <span class="chart-total" x-text="fmtMiles(currentWeekDailyData().reduce((a,b)=>a+b,0)) + ' mi'"></span>
                 </div>
-                <svg class="chart-svg" :viewBox="'0 0 360 160'" preserveAspectRatio="none">
-                  <line class="chart-baseline" x1="0" y1="125" x2="360" y2="125"></line>
+                <div class="bar-chart" :class="cardio.activeType.toLowerCase()">
                   <template x-for="(val, i) in currentWeekDailyData()" :key="i">
-                    <g>
-                      <rect
-                        :class="(val > 0 ? (cardio.activeType === 'Run' ? 'bar-run' : 'bar-ride') : 'bar-empty') + (i === ((todayDayOfWeek() === 0 ? 6 : todayDayOfWeek() - 1)) ? ' current' : '')"
-                        :x="8 + i * 50"
-                        :y="125 - Math.max(2, (val / Math.max(1, Math.max(...currentWeekDailyData()))) * 105)"
-                        width="38"
-                        :height="Math.max(2, (val / Math.max(1, Math.max(...currentWeekDailyData()))) * 105)"
-                        rx="4" ry="4">
-                      </rect>
-                      <text class="chart-label" :x="27 + i * 50" y="140" x-text="val > 0 ? fmtMiles(val) : ''"></text>
-                      <text class="chart-label" :x="27 + i * 50" y="155" x-text="['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][i]"></text>
-                    </g>
+                    <div class="bar-col">
+                      <span class="bar-value" x-text="val > 0 ? fmtMiles(val) : ''"></span>
+                      <div class="bar-fill"
+                           :class="{ current: i === ((todayDayOfWeek() === 0 ? 6 : todayDayOfWeek() - 1)), empty: val === 0 }"
+                           :style="'height: ' + (val > 0 ? Math.max(2, (val / Math.max(1, Math.max(...currentWeekDailyData()))) * 92) : 2) + '%'"></div>
+                    </div>
                   </template>
-                </svg>
+                </div>
+                <div class="day-labels">
+                  <template x-for="(d, i) in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']" :key="i">
+                    <div class="day-label" :class="{ today: i === ((todayDayOfWeek() === 0 ? 6 : todayDayOfWeek() - 1)) }" x-text="d"></div>
+                  </template>
+                </div>
               </div>
 
               <!-- Recent activities -->
@@ -1566,7 +1607,7 @@
     // ============================================
     function runRoutineApp() {
       return {
-        buildVersion: '2026-05-16.1',  // bump on every notable change
+        buildVersion: '2026-05-16.2',  // bump on every notable change
         tab: 'today',
         categories: [],
         exercises: [],
