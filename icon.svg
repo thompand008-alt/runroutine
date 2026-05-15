@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Solid black background -->
+  <rect width="512" height="512" fill="#000000"/>
+  <!-- Runner silhouette in electric blue -->
+  <g fill="#3B82F6">
+    <!-- Head -->
+    <circle cx="305" cy="118" r="34"/>
+    <!-- Torso (leaning forward) -->
+    <path d="M 270 160 L 312 158 L 330 250 L 282 268 Z"/>
+    <!-- Back arm (swung back, bent) -->
+    <path d="M 270 175 L 230 220 L 215 215 L 218 200 L 252 165 Z"/>
+    <!-- Front arm (swung forward, bent) -->
+    <path d="M 322 175 L 365 195 L 392 165 L 380 152 L 360 168 L 332 162 Z"/>
+    <!-- Front thigh (extended forward) -->
+    <path d="M 300 265 L 360 290 L 372 310 L 358 320 L 296 295 Z"/>
+    <!-- Front shin -->
+    <path d="M 360 305 L 405 360 L 420 358 L 422 372 L 388 380 L 348 318 Z"/>
+    <!-- Front foot -->
+    <ellipse cx="408" cy="378" rx="22" ry="9" transform="rotate(-12 408 378)"/>
+    <!-- Back thigh (driving back) -->
+    <path d="M 280 270 L 240 340 L 218 348 L 208 332 L 248 262 Z"/>
+    <!-- Back shin (bent up) -->
+    <path d="M 218 348 L 192 395 L 168 395 L 168 412 L 210 412 L 248 348 Z"/>
+    <!-- Back foot -->
+    <ellipse cx="178" cy="408" rx="22" ry="9" transform="rotate(8 178 408)"/>
+  </g>
+</svg>
