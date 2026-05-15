@@ -1229,36 +1229,75 @@
         },
 
         pickRotation(categoryId, n) {
+          // Family-aware rotation:
+          // 1. Group pool exercises by variationFamily (custom exercises form
+          //    their own single-member family).
+          // 2. Score each family by recency from past sessions (recent = higher penalty).
+          // 3. Pick the N families with the LOWEST recency score (least recently shown).
+          // 4. Within each picked family, pick the exercise that's been least-recently
+          //    shown — so when a family resurfaces, it shows a VARIATION of what was
+          //    shown last time, not an exact repeat.
           const pool = this.exercises.filter(e => e.categoryId === categoryId);
           if (pool.length === 0) return [];
           if (pool.length <= n) return pool.map(e => e.id);
 
-          // Get past sessions for this category (most recent first)
+          // Build family groupings
+          const families = new Map();  // familyKey -> [{id, ex}]
+          for (const ex of pool) {
+            const key = ex.variationFamily || ('custom_' + ex.id);
+            if (!families.has(key)) families.set(key, []);
+            families.get(key).push(ex);
+          }
+
+          // Past sessions for this category, most recent first
           const past = this.sessions
             .filter(s => s.categoryId === categoryId)
             .sort((a,b) => b.date.localeCompare(a.date))
-            .slice(0, Math.max(1, Math.floor(pool.length / n)));
+            .slice(0, Math.max(8, pool.length));  // look back enough to score everything
 
-          // Score: lower score = more recently shown
-          const score = new Map();
-          pool.forEach(e => score.set(e.id, 0));
+          // Recency penalties: more recent past sessions give bigger penalty
+          const familyScore = new Map();
+          const exerciseScore = new Map();
           past.forEach((s, idx) => {
-            s.displayedExerciseIds.forEach(id => {
-              const current = score.get(id) ?? 0;
-              // More recent past sessions penalize more
-              score.set(id, current + (past.length - idx));
+            const weight = past.length - idx;  // most recent = highest weight
+            (s.displayedExerciseIds || []).forEach(exId => {
+              exerciseScore.set(exId, (exerciseScore.get(exId) || 0) + weight);
+              // Find which family this exId belongs to (in current pool)
+              const ex = pool.find(e => e.id === exId);
+              if (ex) {
+                const famKey = ex.variationFamily || ('custom_' + ex.id);
+                if (families.has(famKey)) {
+                  familyScore.set(famKey, (familyScore.get(famKey) || 0) + weight);
+                }
+              }
             });
           });
 
-          // Sort by score ascending (least recently shown first), tiebreak with random
-          const ordered = [...pool].sort((a,b) => {
-            const sa = score.get(a.id) ?? 0;
-            const sb = score.get(b.id) ?? 0;
-            if (sa !== sb) return sa - sb;
+          // Sort families: least-recently-shown first; random tiebreak
+          const familyList = [...families.keys()].map(fk => ({
+            key: fk,
+            score: familyScore.get(fk) || 0
+          })).sort((a, b) => {
+            if (a.score !== b.score) return a.score - b.score;
             return Math.random() - 0.5;
           });
 
-          return ordered.slice(0, n).map(e => e.id);
+          // Pick top N families
+          const pickedFamilies = familyList.slice(0, n);
+
+          // From each picked family, pick the least-recently-shown exercise
+          const picks = pickedFamilies.map(fam => {
+            const exs = families.get(fam.key);
+            const sortedExs = exs.slice().sort((a, b) => {
+              const sa = exerciseScore.get(a.id) || 0;
+              const sb = exerciseScore.get(b.id) || 0;
+              if (sa !== sb) return sa - sb;
+              return Math.random() - 0.5;
+            });
+            return sortedExs[0].id;
+          });
+
+          return picks;
         },
 
         todayCategoryName() {
