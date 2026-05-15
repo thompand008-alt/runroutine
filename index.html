@@ -258,6 +258,56 @@
     }
     .schedule-row.today .day { color: var(--primary); }
     .schedule-row.today { border-color: rgba(59, 130, 246, 0.4); }
+    /* Multi-category schedule row */
+    .schedule-row-multi {
+      grid-template-columns: 56px 1fr;
+      align-items: start;
+      padding: 12px 14px;
+    }
+    .schedule-row-multi .day {
+      padding-top: 8px;
+    }
+    .schedule-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .cat-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--primary-tint-strong);
+      color: var(--primary-hover);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      padding: 6px 10px;
+      border-radius: 100px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .cat-chip:active { background: var(--primary-tint); }
+    .cat-chip svg { opacity: 0.7; }
+    .rest-label {
+      color: var(--text-3);
+      font-style: italic;
+      font-size: 13px;
+      padding: 6px 0;
+    }
+    .add-cat-select {
+      background: var(--surface-2);
+      border: 1px dashed var(--border);
+      color: var(--text-2);
+      padding: 6px 22px 6px 10px;
+      border-radius: 100px;
+      font-family: inherit;
+      font-size: 13px;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+
     .schedule-row select {
       background: var(--surface-2);
       border: 1px solid var(--border);
@@ -540,30 +590,34 @@
             </button>
           </div>
 
-          <!-- Exercise list (blue pill cards) -->
-          <template x-if="todayExercises.length > 0">
-            <div>
-              <template x-for="ex in todayExercises" :key="ex.id">
-                <div class="exercise-bubble">
-                  <div class="ex-name" x-text="ex.name"></div>
-                  <div class="ex-prescription" x-text="formatPrescription(ex)"></div>
-                  <div class="ex-notes" x-show="ex.notes" x-text="ex.notes"></div>
+          <!-- Per-category groups, each with a small header and its exercise pills -->
+          <template x-for="group in todayGroups" :key="group.category.id">
+            <div style="margin-bottom: 20px;">
+              <div class="category-header" style="padding: 4px 4px 8px;">
+                <h2 x-text="group.category.name" style="font-size: 14px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-2); font-weight: 700;"></h2>
+                <span class="count" x-text="group.exercises.length + ' exercises'"></span>
+              </div>
+              <template x-if="group.exercises.length > 0">
+                <div>
+                  <template x-for="ex in group.exercises" :key="ex.id">
+                    <div class="exercise-bubble">
+                      <div class="ex-name" x-text="ex.name"></div>
+                      <div class="ex-prescription" x-text="formatPrescription(ex)"></div>
+                      <div class="ex-notes" x-show="ex.notes" x-text="ex.notes"></div>
+                    </div>
+                  </template>
+                </div>
+              </template>
+              <template x-if="group.exercises.length === 0">
+                <div class="rest-day" style="padding: 20px 16px;">
+                  <p style="margin: 0; color: var(--text-2);">No exercises in this category yet. Add some in the Exercises tab.</p>
                 </div>
               </template>
             </div>
           </template>
 
-          <!-- Rest day -->
-          <template x-if="todayExercises.length === 0 && todayCategory">
-            <div class="rest-day">
-              <h3 x-text="todayCategory.name"></h3>
-              <p>No exercises in this category yet.</p>
-              <p style="margin-top: 8px;">Add exercises in the Exercises tab.</p>
-            </div>
-          </template>
-
-          <!-- True rest day (no category assigned) -->
-          <template x-if="!todayCategory">
+          <!-- True rest day (no categories scheduled / overridden to none) -->
+          <template x-if="todayGroups.length === 0">
             <div class="rest-day">
               <h3>Rest Day</h3>
               <p>Recover well.</p>
@@ -582,19 +636,30 @@
         </div>
         <div class="container">
           <template x-for="(dayName, idx) in dayNames" :key="idx">
-            <div class="schedule-row" :class="{ today: idx === todayDayOfWeek() }">
+            <div class="schedule-row schedule-row-multi" :class="{ today: idx === todayDayOfWeek() }">
               <div class="day" x-text="dayName"></div>
-              <select :value="getScheduleForDay(idx)" @change="setScheduleForDay(idx, $event.target.value)">
-                <option value="">Rest</option>
-                <template x-for="cat in categories" :key="cat.id">
-                  <option :value="cat.id" x-text="cat.name"></option>
+              <div class="schedule-chips">
+                <template x-for="cat in categoriesForDay(idx)" :key="cat.id">
+                  <button class="cat-chip" @click="removeCategoryFromDay(idx, cat.id)" :title="'Remove ' + cat.name">
+                    <span x-text="cat.name"></span>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
                 </template>
-              </select>
+                <template x-if="categoriesForDay(idx).length === 0">
+                  <span class="rest-label">Rest day</span>
+                </template>
+                <select class="add-cat-select" @change="addCategoryToDay(idx, parseInt($event.target.value)); $event.target.value=''">
+                  <option value="">+ Add</option>
+                  <template x-for="cat in categoriesAvailableForDay(idx)" :key="cat.id">
+                    <option :value="cat.id" x-text="cat.name"></option>
+                  </template>
+                </select>
+              </div>
             </div>
           </template>
 
           <p class="help-text" style="margin-top: 14px;">
-            Tap any day to change its category. You can also override an individual day from the Today tab without changing your weekly pattern.
+            Tap "+ Add" to schedule another category for that day. Tap a category chip to remove it. Multiple categories on the same day = exercises from all their pools show up on Today.
           </p>
         </div>
       </section>
@@ -907,28 +972,31 @@
       </div>
     </template>
 
-    <!-- OVERRIDE TODAY MODAL -->
+    <!-- OVERRIDE TODAY MODAL (multi-category) -->
     <template x-if="modal.kind === 'override'">
       <div>
         <div class="modal-backdrop" @click="closeModal()"></div>
         <div class="modal">
           <div class="modal-handle"></div>
           <div class="modal-header">
-            <h2>Change Today's Category</h2>
+            <h2>Change Today</h2>
             <button class="btn-icon" @click="closeModal()">
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
           <div class="modal-body">
-            <p class="help-text" style="margin-bottom: 16px;">This only changes today. Your weekly pattern stays the same.</p>
+            <p class="help-text" style="margin-bottom: 16px;">Pick any combination of categories for today. Your weekly pattern stays unchanged.</p>
             <div class="form-field">
-              <label>Today's category</label>
-              <select x-model.number="modal.override.categoryId">
-                <option :value="null">Rest day</option>
+              <label>Categories for today</label>
+              <div class="suggestion-list">
                 <template x-for="cat in categories" :key="cat.id">
-                  <option :value="cat.id" x-text="cat.name"></option>
+                  <div class="suggestion" :class="{ added: (modal.override.categoryIds || []).includes(cat.id) }" @click="toggleOverrideCategory(cat.id)" style="cursor: pointer;">
+                    <div class="s-name" x-text="cat.name"></div>
+                    <button @click.stop="toggleOverrideCategory(cat.id)" x-text="(modal.override.categoryIds || []).includes(cat.id) ? '✓' : '+'"></button>
+                  </div>
                 </template>
-              </select>
+              </div>
+              <p class="help-text" style="margin-top: 10px;">No selection = Rest day for today.</p>
             </div>
             <button class="btn" @click="saveOverride()">Apply Override</button>
             <button class="btn btn-ghost" @click="clearOverride()" style="margin-top: 8px;">Reset to Default Schedule</button>
@@ -1110,21 +1178,32 @@
       sessions: '++id, date, categoryId',
       settings: '&key'
     });
+    // v2: schedule allows multiple categories per day (dropped unique constraint).
+    // Override row shape gets categoryIds[] (migrated on read; old rows with categoryId still work).
+    db.version(2).stores({
+      categories: '++id, name, position',
+      exercises: '++id, categoryId, name, libraryName, addedAt',
+      schedule: '++id, dayOfWeek',
+      overrides: '++id, &date',
+      sessions: '++id, date, categoryId',
+      settings: '&key'
+    });
 
     // ============================================
     // ALPINE.JS APP COMPONENT
     // ============================================
     function runRoutineApp() {
       return {
-        buildVersion: '2026-05-15.5',  // bump on every notable change
+        buildVersion: '2026-05-15.6',  // bump on every notable change
         tab: 'today',
         categories: [],
         exercises: [],
         schedule: [],   // [{dayOfWeek, categoryId}]
         overrides: [],  // [{date, categoryId}]
         sessions: [],   // [{date, categoryId, displayedExerciseIds}]
-        todayExercises: [],
-        todayCategory: null,
+        todayExercises: [],     // flat list (legacy, still populated for backward refs)
+        todayCategory: null,     // legacy single-category ref
+        todayGroups: [],         // [{ category, exercises }] — new multi-category structure
         dayNames: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
         modal: { kind: null, exercise: {}, category: {}, override: {}, suggestions: [] },
         toast: { show: false, msg: '' },
@@ -1146,6 +1225,7 @@
           try {
             await this.bootstrap();
             await this.ensureMinimumState();  // safety net if bootstrap flag set but DB empty
+            await this.migrateAddNewCategories();  // v2.6: add Core and PT & Strength if missing
             await this.dedupeCategories();
             await this.refreshData();
             await this.computeToday();
@@ -1185,10 +1265,12 @@
             const catCount = await db.categories.count();
             if (catCount === 0) {
               await db.categories.bulkAdd([
-                { name: 'Daily',  position: 1, exercisesPerSession: 5 },
-                { name: 'Gym A',  position: 2, exercisesPerSession: 6 },
-                { name: 'Gym B',  position: 3, exercisesPerSession: 6 },
-                { name: 'Rest',   position: 4, exercisesPerSession: 2 }
+                { name: 'Daily',          position: 1, exercisesPerSession: 5 },
+                { name: 'Gym A',          position: 2, exercisesPerSession: 6 },
+                { name: 'Gym B',          position: 3, exercisesPerSession: 6 },
+                { name: 'Rest',           position: 4, exercisesPerSession: 2 },
+                { name: 'Core',           position: 5, exercisesPerSession: 3 },
+                { name: 'PT & Strength',  position: 6, exercisesPerSession: 6 }
               ]);
             }
 
@@ -1212,6 +1294,26 @@
 
             await db.settings.put({ key: 'bootstrapped', value: true });
           });
+        },
+
+        // One-time migration: add Core and PT & Strength categories for users
+        // who installed before they were added to the bootstrap seed. Idempotent —
+        // safe to call every init; only adds what's missing.
+        async migrateAddNewCategories() {
+          const cats = await db.categories.toArray();
+          const names = new Set(cats.map(c => c.name.toLowerCase()));
+          const maxPos = cats.length > 0 ? Math.max(...cats.map(c => c.position || 0)) : 0;
+          const toAdd = [];
+          if (!names.has('core')) {
+            toAdd.push({ name: 'Core', position: maxPos + 1, exercisesPerSession: 3 });
+          }
+          if (!names.has('pt & strength')) {
+            toAdd.push({ name: 'PT & Strength', position: maxPos + 2, exercisesPerSession: 6 });
+          }
+          if (toAdd.length > 0) {
+            await db.categories.bulkAdd(toAdd);
+            console.log('[RunRoutine] migrated: added ' + toAdd.map(c => c.name).join(', '));
+          }
         },
 
         // Defensive: ensures categories exist even if bootstrap flag was set
@@ -1293,64 +1395,89 @@
           return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
         },
 
-        // ---- SCHEDULE ----
-        getScheduleForDay(dow) {
-          const entry = this.schedule.find(s => s.dayOfWeek === dow);
-          return entry?.categoryId ?? '';
+        // ---- SCHEDULE (multi-category) ----
+        // Returns array of categoryIds scheduled for the given day of week.
+        categoryIdsForDay(dow) {
+          return this.schedule
+            .filter(s => s.dayOfWeek === dow && s.categoryId != null)
+            .map(s => s.categoryId);
         },
-        async setScheduleForDay(dow, value) {
-          const categoryId = value === '' ? null : parseInt(value);
-          const existing = await db.schedule.where('dayOfWeek').equals(dow).first();
-          if (existing) {
-            await db.schedule.update(existing.id, { categoryId });
-          } else {
-            await db.schedule.add({ dayOfWeek: dow, categoryId });
+        categoriesForDay(dow) {
+          const ids = this.categoryIdsForDay(dow);
+          return ids.map(id => this.categories.find(c => c.id === id)).filter(Boolean);
+        },
+        categoriesAvailableForDay(dow) {
+          // Categories not yet scheduled for this day
+          const scheduledIds = new Set(this.categoryIdsForDay(dow));
+          return this.categories.filter(c => !scheduledIds.has(c.id));
+        },
+        async addCategoryToDay(dow, categoryId) {
+          if (!categoryId) return;
+          // Don't double-add the same category for the same day
+          const existing = this.schedule.find(s => s.dayOfWeek === dow && s.categoryId === categoryId);
+          if (existing) return;
+          await db.schedule.add({ dayOfWeek: dow, categoryId });
+          await this.refreshData();
+          await this.computeToday();
+          this.showToast('Added to schedule');
+        },
+        async removeCategoryFromDay(dow, categoryId) {
+          const entries = this.schedule.filter(s => s.dayOfWeek === dow && s.categoryId === categoryId);
+          for (const e of entries) {
+            await db.schedule.delete(e.id);
           }
           await this.refreshData();
           await this.computeToday();
-          this.showToast('Schedule updated');
+          this.showToast('Removed from schedule');
         },
 
-        // ---- TODAY ----
+        // ---- TODAY (multi-category) ----
+        // Determines which categories apply today (override or schedule)
+        // and generates/loads a session per category, populating todayGroups.
         async computeToday() {
           const today = this.todayString();
           const dow = this.todayDayOfWeek();
 
-          // Check for override first
+          // Read override row for today (may have categoryIds[] or legacy categoryId)
           const override = this.overrides.find(o => o.date === today);
-          let categoryId;
+          let categoryIds;
           if (override) {
-            categoryId = override.categoryId;
+            if (Array.isArray(override.categoryIds)) {
+              categoryIds = override.categoryIds.filter(id => id != null);
+            } else if (override.categoryId != null) {
+              categoryIds = [override.categoryId];  // legacy single-cat override
+            } else {
+              categoryIds = [];  // explicit rest-day override
+            }
           } else {
-            const entry = this.schedule.find(s => s.dayOfWeek === dow);
-            categoryId = entry?.categoryId ?? null;
+            categoryIds = this.categoryIdsForDay(dow);
           }
 
-          if (!categoryId) {
-            this.todayCategory = null;
-            this.todayExercises = [];
-            return;
+          // Build per-category groups
+          const groups = [];
+          for (const catId of categoryIds) {
+            const category = this.categories.find(c => c.id === catId);
+            if (!category) continue;
+
+            // Find or generate today's session for this category
+            let session = await db.sessions.where({ date: today, categoryId: catId }).first();
+            if (!session) {
+              const exerciseIds = this.pickRotation(catId, category.exercisesPerSession || 5);
+              session = { date: today, categoryId: catId, displayedExerciseIds: exerciseIds };
+              await db.sessions.add(session);
+            }
+            const exercises = session.displayedExerciseIds
+              .map(id => this.exercises.find(e => e.id === id))
+              .filter(Boolean);
+            groups.push({ category, exercises });
           }
 
-          this.todayCategory = this.categories.find(c => c.id === categoryId);
-          if (!this.todayCategory) {
-            this.todayExercises = [];
-            return;
-          }
+          this.sessions = await db.sessions.toArray();
+          this.todayGroups = groups;
 
-          // Check if we already generated today's session
-          let session = await db.sessions.where({ date: today, categoryId }).first();
-          if (!session) {
-            const exerciseIds = this.pickRotation(categoryId, this.todayCategory.exercisesPerSession || 5);
-            session = { date: today, categoryId, displayedExerciseIds: exerciseIds };
-            await db.sessions.add(session);
-            this.sessions = await db.sessions.toArray();
-          }
-
-          // Resolve exercise objects
-          this.todayExercises = session.displayedExerciseIds
-            .map(id => this.exercises.find(e => e.id === id))
-            .filter(Boolean);
+          // Legacy fields for any leftover references
+          this.todayCategory = groups[0] ? groups[0].category : null;
+          this.todayExercises = groups.flatMap(g => g.exercises);
         },
 
         pickRotation(categoryId, n) {
@@ -1426,30 +1553,48 @@
         },
 
         todayCategoryName() {
-          return this.todayCategory ? this.todayCategory.name : 'Rest Day';
+          if (this.todayGroups && this.todayGroups.length > 0) {
+            return this.todayGroups.map(g => g.category.name).join(' + ');
+          }
+          return 'Rest Day';
         },
 
-        // ---- OVERRIDE ----
+        // ---- OVERRIDE (multi-category) ----
         openOverrideModal() {
           const today = this.todayString();
           const existing = this.overrides.find(o => o.date === today);
+          let selected;
+          if (existing) {
+            selected = Array.isArray(existing.categoryIds)
+              ? existing.categoryIds.slice()
+              : (existing.categoryId != null ? [existing.categoryId] : []);
+          } else {
+            // Pre-populate with today's currently-scheduled categories
+            selected = this.todayGroups.map(g => g.category.id);
+          }
           this.modal = {
             kind: 'override',
-            override: {
-              categoryId: existing ? existing.categoryId : (this.todayCategory?.id ?? null)
-            }
+            override: { categoryIds: selected }
           };
+        },
+        toggleOverrideCategory(catId) {
+          const arr = this.modal.override.categoryIds || [];
+          const idx = arr.indexOf(catId);
+          if (idx >= 0) arr.splice(idx, 1);
+          else arr.push(catId);
+          this.modal.override.categoryIds = arr;
         },
         async saveOverride() {
           const today = this.todayString();
           const existing = await db.overrides.where('date').equals(today).first();
-          const categoryId = this.modal.override.categoryId;
+          const categoryIds = this.modal.override.categoryIds || [];
+          const row = { date: today, categoryIds, categoryId: null };
           if (existing) {
-            await db.overrides.update(existing.id, { categoryId });
+            await db.overrides.update(existing.id, row);
           } else {
-            await db.overrides.add({ date: today, categoryId });
+            await db.overrides.add(row);
           }
-          // Clear any pre-existing session for today (since category changed)
+          // Clear cached sessions for today so they regenerate against the new category set
           await db.sessions.where('date').equals(today).delete();
           await this.refreshData();
           await this.computeToday();
@@ -1675,8 +1820,22 @@
             : `Delete "${cat.name}"?`;
           if (!confirm(msg)) return;
           await db.exercises.where('categoryId').equals(cat.id).delete();
-          await db.schedule.where('categoryId').equals(cat.id).modify({ categoryId: null });
-          await db.overrides.where('categoryId').equals(cat.id).modify({ categoryId: null });
+          // Remove all schedule rows pointing to this category
+          await db.schedule.where('categoryId').equals(cat.id).delete();
+          // Clean up overrides — strip from categoryIds[] arrays and clear legacy categoryId
+          const allOverrides = await db.overrides.toArray();
+          for (const o of allOverrides) {
+            let dirty = false;
+            if (Array.isArray(o.categoryIds) && o.categoryIds.includes(cat.id)) {
+              o.categoryIds = o.categoryIds.filter(id => id !== cat.id);
+              dirty = true;
+            }
+            if (o.categoryId === cat.id) {
+              o.categoryId = null;
+              dirty = true;
+            }
+            if (dirty) await db.overrides.put(o);
+          }
           await db.sessions.where('categoryId').equals(cat.id).delete();
           await db.categories.delete(cat.id);
           await this.refreshData();
