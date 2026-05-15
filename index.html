@@ -1616,7 +1616,7 @@
     // ============================================
     function runRoutineApp() {
       return {
-        buildVersion: '2026-05-16.4',  // bump on every notable change
+        buildVersion: '2026-05-16.5',  // bump on every notable change
         tab: 'today',
         categories: [],
         exercises: [],
@@ -2191,7 +2191,13 @@
           };
 
           try {
+            let oldCategoryId = null;
             if (ex.id) {
+              // Capture the existing categoryId BEFORE updating so we can invalidate
+              // today's cached session for it (covers the case where the user moves
+              // an exercise out of today's category and would otherwise see it lingering)
+              const existing = await db.exercises.get(ex.id);
+              oldCategoryId = existing ? existing.categoryId : null;
               await db.exercises.update(ex.id, record);
               this.showToast('Exercise updated');
             } else {
@@ -2199,7 +2205,15 @@
               await db.exercises.add(record);
               this.showToast('Exercise added');
             }
+            // Invalidate today's session for the NEW category (handles add or
+            // edit-into-today)
             await this.invalidateTodaySessionForCategory(catId);
+            // Also invalidate the OLD category's session if this was an edit that
+            // moved the exercise to a different category — without this, today's
+            // cached session for the old category still references the moved exercise
+            if (oldCategoryId && oldCategoryId !== catId) {
+              await this.invalidateTodaySessionForCategory(oldCategoryId);
+            }
             await this.refreshData();
             await this.computeToday();
             this.closeModal();
