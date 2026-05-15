@@ -3,7 +3,7 @@
 //   - HTML (index.html / root): network-first, fallback to cache. Ensures updates show through.
 //   - Everything else (icons, CDN libs, manifest): cache-first.
 // Bump CACHE_VERSION on every meaningful update.
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = 'runroutine-' + CACHE_VERSION;
 const ASSETS = [
   './manifest.json',
