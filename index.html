@@ -1616,7 +1616,7 @@
     // ============================================
     function runRoutineApp() {
       return {
-        buildVersion: '2026-05-16.5',  // bump on every notable change
+        buildVersion: '2026-05-16.6',  // bump on every notable change
         tab: 'today',
         categories: [],
         exercises: [],
@@ -2410,7 +2410,10 @@
             return;
           }
           const cid = encodeURIComponent(this.cardio.clientId.trim());
-          const redirect = encodeURIComponent(window.location.origin + '/');
+          // Redirect back to the current page (works for both root and subdirectory deploys
+          // — e.g. /runroutine/ on GitHub Pages, / on Netlify).
+          const currentUrl = window.location.origin + window.location.pathname;
+          const redirect = encodeURIComponent(currentUrl);
           const url = 'https://www.strava.com/oauth/authorize'
             + '?client_id=' + cid
             + '&redirect_uri=' + redirect
@@ -2426,7 +2429,7 @@
           if (error) {
             this.diag.lastError = 'Strava OAuth: ' + error;
             // Clean URL
-            history.replaceState({}, '', window.location.pathname);
+            history.replaceState({}, '', window.location.pathname + window.location.hash);
             return;
           }
           if (!code) return;
@@ -2436,7 +2439,7 @@
           const clientSecret = await this.getSetting('stravaClientSecret');
           if (!clientId || !clientSecret) {
             this.diag.lastError = 'Strava callback received but no Client ID/Secret stored';
-            history.replaceState({}, '', window.location.pathname);
+            history.replaceState({}, '', window.location.pathname + window.location.hash);
             return;
           }
 
@@ -2466,7 +2469,7 @@
             this.diag.lastError = 'OAuth exchange: ' + e.message;
             this.showToast('Connection failed: ' + e.message);
           }
-          history.replaceState({}, '', window.location.pathname);
+          history.replaceState({}, '', window.location.pathname + window.location.hash);
         },
 
         async ensureFreshToken() {
