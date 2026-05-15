@@ -1022,13 +1022,13 @@
           <!-- Connected state: stats + charts + activities -->
           <template x-if="cardio.connected">
             <div>
-              <!-- Year-to-date hero -->
+              <!-- This Week hero (top) -->
               <div class="cardio-hero">
-                <div class="ytd-label" x-text="(new Date()).getFullYear() + ' Year-to-Date'"></div>
+                <div class="ytd-label">This Week</div>
                 <div class="ytd-value" :class="cardio.activeType.toLowerCase()">
-                  <span x-text="fmtMiles(ytdMiles())"></span><span class="ytd-suffix"> mi</span>
+                  <span x-text="fmtMiles(thisWeekMiles())"></span><span class="ytd-suffix"> mi</span>
                 </div>
-                <div class="ytd-sub" x-text="ytdCount() + ' ' + (cardio.activeType === 'Run' ? 'runs' : 'rides')"></div>
+                <div class="ytd-sub" x-text="thisWeekCount() + ' ' + (cardio.activeType === 'Run' ? 'runs' : 'rides') + ' this week'"></div>
               </div>
 
               <!-- 12-week chart (HTML divs) -->
@@ -1094,6 +1094,15 @@
                   </div>
                 </div>
               </template>
+
+              <!-- Year-to-date hero (bottom) -->
+              <div class="cardio-hero" style="margin-top: 20px;">
+                <div class="ytd-label" x-text="(new Date()).getFullYear() + ' Year-to-Date'"></div>
+                <div class="ytd-value" :class="cardio.activeType.toLowerCase()">
+                  <span x-text="fmtMiles(ytdMiles())"></span><span class="ytd-suffix"> mi</span>
+                </div>
+                <div class="ytd-sub" x-text="ytdCount() + ' ' + (cardio.activeType === 'Run' ? 'runs' : 'rides') + ' this year'"></div>
+              </div>
 
               <!-- Sync bar -->
               <div class="sync-bar">
@@ -1607,7 +1616,7 @@
     // ============================================
     function runRoutineApp() {
       return {
-        buildVersion: '2026-05-16.2',  // bump on every notable change
+        buildVersion: '2026-05-16.3',  // bump on every notable change
         tab: 'today',
         categories: [],
         exercises: [],
@@ -2588,6 +2597,19 @@
           const year = new Date().getFullYear();
           return this.activitiesOfType()
             .filter(a => new Date(a.startDate).getFullYear() === year).length;
+        },
+        thisWeekMiles() {
+          return this.currentWeekDailyData().reduce((a, b) => a + b, 0);
+        },
+        thisWeekCount() {
+          const ws = this.weekStart(new Date()).getTime();
+          const we = ws + 7 * 24 * 60 * 60 * 1000;
+          return this.activitiesOfType()
+            .filter(a => {
+              const t = new Date(a.startDate).getTime();
+              return t >= ws && t < we;
+            })
+            .length;
         },
         // Returns Monday-anchored start date for a given Date (in local time)
         weekStart(d) {
