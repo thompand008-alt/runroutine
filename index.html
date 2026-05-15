@@ -654,10 +654,70 @@
         <div class="tab-header">
           <div>
             <h1>Settings</h1>
-            <div class="subtitle">RunRoutine v1.0</div>
+            <div class="subtitle" x-text="'Build ' + buildVersion"></div>
           </div>
         </div>
         <div class="container">
+          <!-- Diagnostics: visible runtime state so we can debug remotely -->
+          <div class="setting-section">
+            <h3>Diagnostics</h3>
+            <div class="setting-row">
+              <div>
+                <div class="label">Build version</div>
+                <div class="meta" x-text="buildVersion"></div>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="label">Categories in DB</div>
+                <div class="meta" x-text="diag.catCount + ' rows'"></div>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="label">Exercises in DB</div>
+                <div class="meta" x-text="diag.exCount + ' rows'"></div>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="label">Schedule entries</div>
+                <div class="meta" x-text="diag.schedCount + ' rows'"></div>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="label">Sessions logged</div>
+                <div class="meta" x-text="diag.sessionCount + ' rows'"></div>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="label">Bootstrapped flag</div>
+                <div class="meta" x-text="diag.bootstrappedFlag ? 'true' : 'false (or missing)'"></div>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="label">Today (day of week)</div>
+                <div class="meta" x-text="dayNames[todayDayOfWeek()] + ' (' + todayString() + ')'"></div>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="label">Last init error</div>
+                <div class="meta" x-text="diag.lastError || 'none'"></div>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="label">Refresh diagnostics</div>
+                <div class="meta">Re-read DB state</div>
+              </div>
+              <button class="btn btn-secondary btn-small" @click="refreshDiagnostics()">Refresh</button>
+            </div>
+          </div>
+
           <!-- Categories management -->
           <div class="setting-section">
             <h3>Categories</h3>
@@ -1056,6 +1116,7 @@
     // ============================================
     function runRoutineApp() {
       return {
+        buildVersion: '2026-05-15.5',  // bump on every notable change
         tab: 'today',
         categories: [],
         exercises: [],
@@ -1067,58 +1128,122 @@
         dayNames: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
         modal: { kind: null, exercise: {}, category: {}, override: {}, suggestions: [] },
         toast: { show: false, msg: '' },
+        diag: {
+          catCount: 0,
+          exCount: 0,
+          schedCount: 0,
+          sessionCount: 0,
+          bootstrappedFlag: false,
+          lastError: null
+        },
 
         // ---- INIT ----
         _initStarted: false,
         async init() {
-          // Guard against double-init (Alpine sometimes calls init twice in dev)
           if (this._initStarted) return;
           this._initStarted = true;
-          await this.bootstrap();
-          await this.dedupeCategories();
-          await this.refreshData();
-          await this.computeToday();
+          console.log('[RunRoutine] init start, build ' + this.buildVersion);
+          try {
+            await this.bootstrap();
+            await this.ensureMinimumState();  // safety net if bootstrap flag set but DB empty
+            await this.dedupeCategories();
+            await this.refreshData();
+            await this.computeToday();
+            await this.refreshDiagnostics();
+            console.log('[RunRoutine] init complete: ' + this.categories.length + ' categories, ' + this.exercises.length + ' exercises');
+          } catch (e) {
+            console.error('[RunRoutine] init failed:', e);
+            this.diag.lastError = (e && e.message) || String(e);
+            this.showToast('Init error: ' + this.diag.lastError);
+          }
 
-          // Register service worker
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW registration failed:', e));
           }
         },
 
-        async bootstrap() {
-          // Use settings flag to ensure bootstrap only runs once ever
-          const flag = await db.settings.where('key').equals('bootstrapped').first();
-          if (flag) return;
+        async refreshDiagnostics() {
+          try {
+            this.diag.catCount = await db.categories.count();
+            this.diag.exCount = await db.exercises.count();
+            this.diag.schedCount = await db.schedule.count();
+            this.diag.sessionCount = await db.sessions.count();
+            const flag = await db.settings.where('key').equals('bootstrapped').first();
+            this.diag.bootstrappedFlag = !!flag;
+          } catch (e) {
+            this.diag.lastError = 'diag: ' + ((e && e.message) || String(e));
+          }
+        },
 
+        async bootstrap() {
+          // Wrap in a transaction so two concurrent init calls (e.g. Alpine
+          // re-rendering the root) serialize cleanly and can't double-seed.
+          await db.transaction('rw', db.categories, db.schedule, db.settings, async () => {
+            const flag = await db.settings.where('key').equals('bootstrapped').first();
+            if (flag) return;
+
+            const catCount = await db.categories.count();
+            if (catCount === 0) {
+              await db.categories.bulkAdd([
+                { name: 'Daily',  position: 1, exercisesPerSession: 5 },
+                { name: 'Gym A',  position: 2, exercisesPerSession: 6 },
+                { name: 'Gym B',  position: 3, exercisesPerSession: 6 },
+                { name: 'Rest',   position: 4, exercisesPerSession: 2 }
+              ]);
+            }
+
+            const schedCount = await db.schedule.count();
+            if (schedCount === 0) {
+              const cats = await db.categories.toArray();
+              const daily = cats.find(c => c.name === 'Daily');
+              const gymA  = cats.find(c => c.name === 'Gym A');
+              const gymB  = cats.find(c => c.name === 'Gym B');
+              const rest  = cats.find(c => c.name === 'Rest');
+              await db.schedule.bulkAdd([
+                { dayOfWeek: 0, categoryId: rest?.id ?? null },
+                { dayOfWeek: 1, categoryId: daily?.id ?? null },
+                { dayOfWeek: 2, categoryId: gymA?.id ?? null },
+                { dayOfWeek: 3, categoryId: daily?.id ?? null },
+                { dayOfWeek: 4, categoryId: gymB?.id ?? null },
+                { dayOfWeek: 5, categoryId: daily?.id ?? null },
+                { dayOfWeek: 6, categoryId: rest?.id ?? null }
+              ]);
+            }
+
+            await db.settings.put({ key: 'bootstrapped', value: true });
+          });
+        },
+
+        // Defensive: ensures categories exist even if bootstrap flag was set
+        // but categories table is empty (covers any prior corrupt state).
+        async ensureMinimumState() {
           const catCount = await db.categories.count();
           if (catCount === 0) {
+            console.warn('[RunRoutine] categories table empty; re-seeding');
             await db.categories.bulkAdd([
               { name: 'Daily',  position: 1, exercisesPerSession: 5 },
               { name: 'Gym A',  position: 2, exercisesPerSession: 6 },
               { name: 'Gym B',  position: 3, exercisesPerSession: 6 },
               { name: 'Rest',   position: 4, exercisesPerSession: 2 }
             ]);
+            const schedCount = await db.schedule.count();
+            if (schedCount === 0) {
+              const cats = await db.categories.toArray();
+              const daily = cats.find(c => c.name === 'Daily');
+              const gymA  = cats.find(c => c.name === 'Gym A');
+              const gymB  = cats.find(c => c.name === 'Gym B');
+              const rest  = cats.find(c => c.name === 'Rest');
+              await db.schedule.bulkAdd([
+                { dayOfWeek: 0, categoryId: rest?.id ?? null },
+                { dayOfWeek: 1, categoryId: daily?.id ?? null },
+                { dayOfWeek: 2, categoryId: gymA?.id ?? null },
+                { dayOfWeek: 3, categoryId: daily?.id ?? null },
+                { dayOfWeek: 4, categoryId: gymB?.id ?? null },
+                { dayOfWeek: 5, categoryId: daily?.id ?? null },
+                { dayOfWeek: 6, categoryId: rest?.id ?? null }
+              ]);
+            }
           }
-
-          const schedCount = await db.schedule.count();
-          if (schedCount === 0) {
-            const cats = await db.categories.toArray();
-            const daily = cats.find(c => c.name === 'Daily');
-            const gymA  = cats.find(c => c.name === 'Gym A');
-            const gymB  = cats.find(c => c.name === 'Gym B');
-            const rest  = cats.find(c => c.name === 'Rest');
-            await db.schedule.bulkAdd([
-              { dayOfWeek: 0, categoryId: rest?.id ?? null },
-              { dayOfWeek: 1, categoryId: daily?.id ?? null },
-              { dayOfWeek: 2, categoryId: gymA?.id ?? null },
-              { dayOfWeek: 3, categoryId: daily?.id ?? null },
-              { dayOfWeek: 4, categoryId: gymB?.id ?? null },
-              { dayOfWeek: 5, categoryId: daily?.id ?? null },
-              { dayOfWeek: 6, categoryId: rest?.id ?? null }
-            ]);
-          }
-
-          await db.settings.put({ key: 'bootstrapped', value: true });
         },
 
         async dedupeCategories() {
