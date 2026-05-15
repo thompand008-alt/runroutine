@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#0A0E14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RunRoutine">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <title>RunRoutine</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/dexie@3/dist/dexie.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.13/dist/cdn.min.js"></script>
+
+  <style>
+    :root {
+      --bg: #0A0E14;
+      --surface: #181C24;
+      --surface-2: #22272F;
+      --surface-3: #2C313A;
+      --border: #252A36;
+      --primary: #3B82F6;
+      --primary-hover: #60A5FA;
+      --primary-tint: rgba(59, 130, 246, 0.12);
+      --primary-tint-strong: rgba(59, 130, 246, 0.22);
+      --success: #22C55E;
+      --warning: #F59E0B;
+      --error: #EF4444;
+      --text: #F0F4F8;
+      --text-2: #9AA4B2;
+      --text-3: #6B7280;
+      --tabbar-h: 64px;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; width: 100%; overflow: hidden; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+      font-size: 16px;
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+      overscroll-behavior: none;
+      touch-action: manipulation;
+    }
+    [x-cloak] { display: none !important; }
+
+    .app {
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Main scrollable content area */
+    main {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-top: calc(var(--safe-top) + 16px);
+      padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 24px);
+    }
+
+    .container {
+      padding: 0 20px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* Header within each tab */
+    .tab-header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding: 8px 20px 20px;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .tab-header h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+    .tab-header .subtitle {
+      color: var(--text-2);
+      font-size: 14px;
+    }
+
+    /* Bottom tab bar (iOS-style) */
+    .tabbar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: calc(var(--tabbar-h) + var(--safe-bottom));
+      padding-bottom: var(--safe-bottom);
+      background: rgba(10, 14, 20, 0.85);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: stretch;
+      z-index: 100;
+    }
+    .tabbar button {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text-3);
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      cursor: pointer;
+      padding: 6px 4px 0;
+      transition: color 0.15s;
+    }
+    .tabbar button.active { color: var(--primary); }
+    .tabbar button svg { width: 24px; height: 24px; }
+
+    /* Today tab — blue bubble cards */
+    .exercise-bubble {
+      background: linear-gradient(135deg, var(--primary-tint-strong) 0%, var(--primary-tint) 100%);
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      border-radius: 16px;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+    }
+    .exercise-bubble .ex-name {
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.01em;
+    }
+    .exercise-bubble .ex-prescription {
+      font-size: 14px;
+      color: var(--primary-hover);
+      margin-top: 4px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .exercise-bubble .ex-notes {
+      font-size: 13px;
+      color: var(--text-2);
+      margin-top: 6px;
+      font-style: italic;
+    }
+
+    /* Rest day display */
+    .rest-day {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px 20px;
+      text-align: center;
+      color: var(--text-2);
+    }
+    .rest-day h3 {
+      color: var(--text);
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+
+    /* Today category banner */
+    .today-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 20px;
+    }
+    .today-banner .label { color: var(--text-2); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+    .today-banner .value { color: var(--primary); font-size: 18px; font-weight: 700; margin-top: 2px; }
+    .today-banner .date { color: var(--text-3); font-size: 12px; margin-top: 4px; }
+
+    /* Buttons */
+    .btn {
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 14px 20px;
+      font-family: inherit;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.05s;
+      width: 100%;
+      letter-spacing: -0.01em;
+    }
+    .btn:active { background: var(--primary-hover); transform: scale(0.98); }
+    .btn-secondary {
+      background: var(--surface-2);
+      color: var(--text);
+    }
+    .btn-secondary:active { background: var(--surface-3); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--primary);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:active { background: var(--surface); }
+    .btn-danger {
+      background: var(--error);
+      color: white;
+    }
+    .btn-small {
+      padding: 8px 14px;
+      font-size: 14px;
+      width: auto;
+    }
+    .btn-icon {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      border: none;
+      background: var(--surface-2);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .btn-icon:active { background: var(--surface-3); }
+
+    /* Schedule tab */
+    .schedule-row {
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      align-items: center;
+      padding: 14px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      gap: 12px;
+    }
+    .schedule-row .day {
+      font-weight: 700;
+      color: var(--text-2);
+      font-size: 14px;
+      letter-spacing: 0.02em;
+    }
+    .schedule-row.today .day { color: var(--primary); }
+    .schedule-row.today { border-color: rgba(59, 130, 246, 0.4); }
+    .schedule-row select {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 15px;
+      width: 100%;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239AA4B2' stroke-width='2'%3e%3cpath d='M6 9l6 6 6-6'/%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      background-size: 16px;
+      padding-right: 36px;
+    }
+
+    /* Exercises tab */
+    .category-group {
+      margin-bottom: 24px;
+    }
+    .category-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 4px 10px;
+    }
+    .category-header h2 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .category-header .count {
+      color: var(--text-3);
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .exercise-row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .exercise-row .info { flex: 1; min-width: 0; }
+    .exercise-row .ex-name { font-size: 15px; font-weight: 600; }
+    .exercise-row .ex-prescription { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+    .exercise-row .ex-tag {
+      display: inline-block;
+      background: var(--surface-2);
+      color: var(--text-2);
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-right: 4px;
+      margin-top: 4px;
+    }
+    .exercise-row .actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+    /* Modal / Sheet */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 200;
+      backdrop-filter: blur(4px);
+    }
+    .modal {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--bg);
+      border-top-left-radius: 24px;
+      border-top-right-radius: 24px;
+      z-index: 201;
+      max-height: 92vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(var(--safe-bottom) + 16px);
+    }
+    .modal-handle {
+      width: 40px;
+      height: 4px;
+      background: var(--surface-3);
+      border-radius: 2px;
+      margin: 8px auto 0;
+    }
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 20px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-header h2 { font-size: 18px; font-weight: 700; }
+    .modal-body { padding: 16px 20px 20px; }
+
+    .form-field { margin-bottom: 16px; }
+    .form-field label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-2);
+      margin-bottom: 6px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .form-field input, .form-field select, .form-field textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 12px 14px;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 16px;
+    }
+    .form-field input:focus, .form-field select:focus, .form-field textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+    .form-field-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    .suggestion-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .suggestion {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 12px 14px;
+      border-radius: 12px;
+      gap: 10px;
+    }
+    .suggestion.added {
+      background: var(--primary-tint);
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+    .suggestion .s-name { font-size: 14px; font-weight: 500; }
+    .suggestion button {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .suggestion.added button { background: var(--success); }
+
+    .toast {
+      position: fixed;
+      bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 20px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--surface-3);
+      color: var(--text);
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 300;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--text-2);
+    }
+    .empty-state h3 { color: var(--text); margin-bottom: 6px; }
+    .empty-state p { font-size: 14px; margin-bottom: 16px; }
+
+    .help-text {
+      font-size: 13px;
+      color: var(--text-3);
+      margin-top: 6px;
+      line-height: 1.5;
+    }
+
+    /* Settings */
+    .setting-section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .setting-section h3 {
+      font-size: 13px;
+      color: var(--text-2);
+      padding: 12px 16px 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 600;
+    }
+    .setting-row {
+      padding: 14px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .setting-row:first-of-type { border-top: 1px solid var(--border); }
+    .setting-row .label { font-size: 15px; }
+    .setting-row .meta { font-size: 13px; color: var(--text-2); margin-top: 2px; }
+
+    .category-edit-row {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .category-edit-row input {
+      flex: 1;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    .category-edit-row .num-input {
+      width: 56px;
+      text-align: center;
+    }
+
+    .tag {
+      display: inline-block;
+      background: var(--surface-2);
+      color: var(--text-2);
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      margin-right: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div x-data="runRoutineApp()" x-cloak class="app">
+
+    <main>
+      <!-- TODAY TAB -->
+      <section x-show="tab === 'today'">
+        <div class="tab-header">
+          <div>
+            <h1>Today</h1>
+            <div class="subtitle" x-text="formatDateLong(new Date())"></div>
+          </div>
+        </div>
+        <div class="container">
+          <!-- Banner showing today's category + override -->
+          <div class="today-banner">
+            <div>
+              <div class="label">Today's Plan</div>
+              <div class="value" x-text="todayCategoryName()"></div>
+            </div>
+            <button class="btn-icon" @click="openOverrideModal()" title="Change today">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+            </button>
+          </div>
+
+          <!-- Exercise list (blue pill cards) -->
+          <template x-if="todayExercises.length > 0">
+            <div>
+              <template x-for="ex in todayExercises" :key="ex.id">
+                <div class="exercise-bubble">
+                  <div class="ex-name" x-text="ex.name"></div>
+                  <div class="ex-prescription" x-text="formatPrescription(ex)"></div>
+                  <div class="ex-notes" x-show="ex.notes" x-text="ex.notes"></div>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <!-- Rest day -->
+          <template x-if="todayExercises.length === 0 && todayCategory">
+            <div class="rest-day">
+              <h3 x-text="todayCategory.name"></h3>
+              <p>No exercises in this category yet.</p>
+              <p style="margin-top: 8px;">Add exercises in the Exercises tab.</p>
+            </div>
+          </template>
+
+          <!-- True rest day (no category assigned) -->
+          <template x-if="!todayCategory">
+            <div class="rest-day">
+              <h3>Rest Day</h3>
+              <p>Recover well.</p>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- SCHEDULE TAB -->
+      <section x-show="tab === 'schedule'">
+        <div class="tab-header">
+          <div>
+            <h1>Schedule</h1>
+            <div class="subtitle">Weekly pattern</div>
+          </div>
+        </div>
+        <div class="container">
+          <template x-for="(dayName, idx) in dayNames" :key="idx">
+            <div class="schedule-row" :class="{ today: idx === todayDayOfWeek() }">
+              <div class="day" x-text="dayName"></div>
+              <select :value="getScheduleForDay(idx)" @change="setScheduleForDay(idx, $event.target.value)">
+                <option value="">Rest</option>
+                <template x-for="cat in categories" :key="cat.id">
+                  <option :value="cat.id" x-text="cat.name"></option>
+                </template>
+              </select>
+            </div>
+          </template>
+
+          <p class="help-text" style="margin-top: 14px;">
+            Tap any day to change its category. You can also override an individual day from the Today tab without changing your weekly pattern.
+          </p>
+        </div>
+      </section>
+
+      <!-- EXERCISES TAB -->
+      <section x-show="tab === 'exercises'">
+        <div class="tab-header">
+          <div>
+            <h1>Exercises</h1>
+            <div class="subtitle" x-text="exercises.length + ' total'"></div>
+          </div>
+          <button class="btn btn-small" @click="openAddExerciseModal()">+ Add</button>
+        </div>
+        <div class="container">
+          <template x-if="exercises.length === 0">
+            <div class="empty-state">
+              <h3>No exercises yet</h3>
+              <p>Add your first exercise to start building your routine.</p>
+              <button class="btn" @click="openAddExerciseModal()">Add Exercise</button>
+            </div>
+          </template>
+
+          <template x-for="cat in categories" :key="cat.id">
+            <div class="category-group" x-show="exercisesInCategory(cat.id).length > 0">
+              <div class="category-header">
+                <h2 x-text="cat.name"></h2>
+                <span class="count" x-text="exercisesInCategory(cat.id).length + ' exercises'"></span>
+              </div>
+              <template x-for="ex in exercisesInCategory(cat.id)" :key="ex.id">
+                <div class="exercise-row">
+                  <div class="info">
+                    <div class="ex-name" x-text="ex.name"></div>
+                    <div class="ex-prescription" x-text="formatPrescription(ex)"></div>
+                    <div>
+                      <template x-for="m in (ex.muscleGroups || []).slice(0, 3)" :key="m">
+                        <span class="ex-tag" x-text="m"></span>
+                      </template>
+                    </div>
+                  </div>
+                  <div class="actions">
+                    <button class="btn-icon" @click="openEditExerciseModal(ex)" title="Edit">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                    </button>
+                    <button class="btn-icon" @click="confirmDeleteExercise(ex)" title="Delete">
+                      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- SETTINGS TAB -->
+      <section x-show="tab === 'settings'">
+        <div class="tab-header">
+          <div>
+            <h1>Settings</h1>
+            <div class="subtitle">RunRoutine v1.0</div>
+          </div>
+        </div>
+        <div class="container">
+          <!-- Categories management -->
+          <div class="setting-section">
+            <h3>Categories</h3>
+            <template x-for="cat in categories" :key="cat.id">
+              <div class="category-edit-row">
+                <input type="text" :value="cat.name" @change="updateCategoryName(cat.id, $event.target.value)" placeholder="Category name">
+                <input type="number" class="num-input" :value="cat.exercisesPerSession" @change="updateCategoryExCount(cat.id, parseInt($event.target.value))" min="1" max="20" title="Exercises per session">
+                <button class="btn-icon" @click="confirmDeleteCategory(cat)" title="Delete category">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                </button>
+              </div>
+            </template>
+            <div class="category-edit-row">
+              <button class="btn btn-secondary btn-small" @click="openAddCategoryModal()" style="width: 100%;">+ Add Category</button>
+            </div>
+            <p class="help-text" style="padding: 0 16px 14px;">
+              The number is how many exercises rotate into each session for that category.
+            </p>
+          </div>
+
+          <!-- Backup / Export -->
+          <div class="setting-section">
+            <h3>Backup</h3>
+            <div class="setting-row">
+              <div>
+                <div class="label">Export data</div>
+                <div class="meta">Download JSON backup to iCloud Drive</div>
+              </div>
+              <button class="btn btn-secondary btn-small" @click="exportData()">Export</button>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="label">Import data</div>
+                <div class="meta">Restore from a JSON backup</div>
+              </div>
+              <button class="btn btn-secondary btn-small" @click="$refs.importFile.click()">Import</button>
+              <input type="file" x-ref="importFile" accept="application/json,.json" style="display:none" @change="importData($event)">
+            </div>
+          </div>
+
+          <!-- About / Reset -->
+          <div class="setting-section">
+            <h3>App</h3>
+            <div class="setting-row">
+              <div>
+                <div class="label">About</div>
+                <div class="meta">RunRoutine — personal training tracker. Data stays on this device.</div>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="label">Reset all data</div>
+                <div class="meta">Delete all exercises, schedule, and history</div>
+              </div>
+              <button class="btn btn-danger btn-small" @click="confirmReset()">Reset</button>
+            </div>
+          </div>
+
+          <p class="help-text" style="text-align:center; margin-top: 20px;">
+            Add to Home Screen on iPhone for the best experience.
+          </p>
+        </div>
+      </section>
+    </main>
+
+    <!-- BOTTOM TABBAR -->
+    <nav class="tabbar">
+      <button :class="{ active: tab === 'today' }" @click="tab = 'today'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        Today
+      </button>
+      <button :class="{ active: tab === 'schedule' }" @click="tab = 'schedule'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        Schedule
+      </button>
+      <button :class="{ active: tab === 'exercises' }" @click="tab = 'exercises'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Exercises
+      </button>
+      <button :class="{ active: tab === 'settings' }" @click="tab = 'settings'">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
+    </nav>
+
+    <!-- ADD/EDIT EXERCISE MODAL -->
+    <template x-if="modal.kind === 'exercise'">
+      <div>
+        <div class="modal-backdrop" @click="closeModal()"></div>
+        <div class="modal">
+          <div class="modal-handle"></div>
+          <div class="modal-header">
+            <h2 x-text="modal.exercise.id ? 'Edit Exercise' : 'Add Exercise'"></h2>
+            <button class="btn-icon" @click="closeModal()">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="form-field">
+              <label>Exercise name</label>
+              <input type="text" x-model="modal.exercise.name" @input="onExerciseNameInput()" placeholder="e.g. Push-up, Romanian Deadlift" autofocus>
+            </div>
+
+            <div class="form-field">
+              <label>Category</label>
+              <select x-model.number="modal.exercise.categoryId">
+                <template x-for="cat in categories" :key="cat.id">
+                  <option :value="cat.id" x-text="cat.name"></option>
+                </template>
+              </select>
+            </div>
+
+            <div class="form-field">
+              <label>Type</label>
+              <select x-model="modal.exercise.type">
+                <option value="reps">Reps</option>
+                <option value="duration">Duration (seconds)</option>
+              </select>
+            </div>
+
+            <div class="form-field-row">
+              <div class="form-field">
+                <label>Sets</label>
+                <input type="number" x-model.number="modal.exercise.prescribedSets" min="1" max="10">
+              </div>
+              <div class="form-field">
+                <label x-text="modal.exercise.type === 'duration' ? 'Seconds' : 'Reps'"></label>
+                <input type="number" x-model.number="modal.exercise.prescribedReps" min="1">
+              </div>
+              <div class="form-field">
+                <label>Weight (lbs)</label>
+                <input type="number" x-model="modal.exercise.prescribedWeight" placeholder="—">
+              </div>
+            </div>
+
+            <div class="form-field">
+              <label>Notes (optional)</label>
+              <input type="text" x-model="modal.exercise.notes" placeholder="e.g. each side, slow tempo">
+            </div>
+
+            <!-- Variation suggestions (only when adding, not editing) -->
+            <div x-show="!modal.exercise.id && modal.suggestions.length > 0" class="form-field">
+              <label>Suggested variations</label>
+              <p class="help-text" style="margin-bottom: 10px;">Tap "+" to add these as separate exercises in the same category.</p>
+              <div class="suggestion-list">
+                <template x-for="(s, i) in modal.suggestions" :key="s.name">
+                  <div class="suggestion" :class="{ added: s.added }">
+                    <div class="s-name" x-text="s.name"></div>
+                    <button @click="addSuggestion(i)" :disabled="s.added" x-text="s.added ? '✓ Added' : '+ Add'"></button>
+                  </div>
+                </template>
+              </div>
+            </div>
+
+            <button class="btn" @click="saveExercise()" style="margin-top: 12px;" x-text="modal.exercise.id ? 'Save Changes' : 'Add Exercise'"></button>
+            <button x-show="modal.exercise.id" class="btn btn-ghost" @click="closeModal()" style="margin-top: 8px;">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ADD CATEGORY MODAL -->
+    <template x-if="modal.kind === 'category'">
+      <div>
+        <div class="modal-backdrop" @click="closeModal()"></div>
+        <div class="modal">
+          <div class="modal-handle"></div>
+          <div class="modal-header">
+            <h2>Add Category</h2>
+            <button class="btn-icon" @click="closeModal()">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="form-field">
+              <label>Category name</label>
+              <input type="text" x-model="modal.category.name" placeholder="e.g. Core, Hip Stability, Gym C" autofocus>
+            </div>
+            <div class="form-field">
+              <label>Exercises per session</label>
+              <input type="number" x-model.number="modal.category.exercisesPerSession" min="1" max="20">
+              <p class="help-text">How many exercises rotate into a session of this category.</p>
+            </div>
+            <button class="btn" @click="saveCategory()">Add Category</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- OVERRIDE TODAY MODAL -->
+    <template x-if="modal.kind === 'override'">
+      <div>
+        <div class="modal-backdrop" @click="closeModal()"></div>
+        <div class="modal">
+          <div class="modal-handle"></div>
+          <div class="modal-header">
+            <h2>Change Today's Category</h2>
+            <button class="btn-icon" @click="closeModal()">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="modal-body">
+            <p class="help-text" style="margin-bottom: 16px;">This only changes today. Your weekly pattern stays the same.</p>
+            <div class="form-field">
+              <label>Today's category</label>
+              <select x-model.number="modal.override.categoryId">
+                <option :value="null">Rest day</option>
+                <template x-for="cat in categories" :key="cat.id">
+                  <option :value="cat.id" x-text="cat.name"></option>
+                </template>
+              </select>
+            </div>
+            <button class="btn" @click="saveOverride()">Apply Override</button>
+            <button class="btn btn-ghost" @click="clearOverride()" style="margin-top: 8px;">Reset to Default Schedule</button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- TOAST -->
+    <div class="toast" x-show="toast.show" x-transition x-text="toast.msg"></div>
+  </div>
+
+  <script>
+    // ============================================
+    // EXERCISE LIBRARY
+    // Tagged by variation family, muscle group, equipment
+    // ============================================
+    const LIBRARY = [
+      // PUSH-UP FAMILY
+      { name: 'Push-up', family: 'pushup', muscles: ['chest','triceps','shoulders'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Knee Push-up', family: 'pushup', muscles: ['chest','triceps'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 12 },
+      { name: 'Incline Push-up', family: 'pushup', muscles: ['chest','triceps'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 12 },
+      { name: 'Decline Push-up', family: 'pushup', muscles: ['chest','shoulders'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Wide Push-up', family: 'pushup', muscles: ['chest'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Diamond Push-up', family: 'pushup', muscles: ['triceps','chest'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Pike Push-up', family: 'pushup', muscles: ['shoulders','triceps'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Archer Push-up', family: 'pushup', muscles: ['chest','triceps'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 6 },
+      { name: 'T Push-up', family: 'pushup', muscles: ['chest','core','shoulders'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 8 },
+
+      // SQUAT FAMILY
+      { name: 'Bodyweight Squat', family: 'squat', muscles: ['quads','glutes'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 15 },
+      { name: 'Goblet Squat', family: 'squat', muscles: ['quads','glutes'], equipment: ['dumbbell','kettlebell'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Barbell Back Squat', family: 'squat', muscles: ['quads','glutes','hamstrings'], equipment: ['barbell'], type: 'reps', sets: 4, reps: 8 },
+      { name: 'Barbell Front Squat', family: 'squat', muscles: ['quads','core'], equipment: ['barbell'], type: 'reps', sets: 4, reps: 6 },
+      { name: 'Box Squat', family: 'squat', muscles: ['quads','glutes'], equipment: ['barbell','box'], type: 'reps', sets: 4, reps: 6 },
+      { name: 'Sumo Squat', family: 'squat', muscles: ['glutes','adductors','quads'], equipment: ['bodyweight','dumbbell'], type: 'reps', sets: 3, reps: 12 },
+      { name: 'Pistol Squat', family: 'squat', muscles: ['quads','glutes','core'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 5 },
+      { name: 'Jump Squat', family: 'squat', muscles: ['quads','glutes','calves'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'B-stance Squat', family: 'squat', muscles: ['quads','glutes'], equipment: ['bodyweight','dumbbell'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Cossack Squat', family: 'squat', muscles: ['adductors','quads','glutes'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Wall Sit', family: 'squat', muscles: ['quads'], equipment: ['bodyweight'], type: 'duration', sets: 3, reps: 45 },
+
+      // LUNGE FAMILY
+      { name: 'Forward Lunge', family: 'lunge', muscles: ['quads','glutes'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Reverse Lunge', family: 'lunge', muscles: ['glutes','quads'], equipment: ['bodyweight','dumbbell'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Walking Lunge', family: 'lunge', muscles: ['quads','glutes'], equipment: ['bodyweight','dumbbell'], type: 'reps', sets: 3, reps: 20 },
+      { name: 'Lateral Lunge', family: 'lunge', muscles: ['adductors','glutes'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Curtsy Lunge', family: 'lunge', muscles: ['glutes','adductors'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Deficit Lunge', family: 'lunge', muscles: ['glutes','quads'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Jumping Lunge', family: 'lunge', muscles: ['quads','glutes','calves'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Bulgarian Split Squat', family: 'lunge', muscles: ['quads','glutes'], equipment: ['bodyweight','dumbbell','bench'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Split Squat', family: 'lunge', muscles: ['quads','glutes'], equipment: ['bodyweight','dumbbell'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Walking Lunge with Twist', family: 'lunge', muscles: ['quads','glutes','core'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 16 },
+      { name: 'Reverse Lunge to Knee Drive', family: 'lunge', muscles: ['glutes','quads','core'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Pendulum Lunge', family: 'lunge', muscles: ['quads','glutes'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+
+      // HINGE / DEADLIFT FAMILY
+      { name: 'Conventional Deadlift', family: 'hinge', muscles: ['hamstrings','glutes','back'], equipment: ['barbell'], type: 'reps', sets: 4, reps: 5 },
+      { name: 'Romanian Deadlift (RDL)', family: 'hinge', muscles: ['hamstrings','glutes'], equipment: ['barbell','dumbbell'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Single-leg RDL', family: 'hinge', muscles: ['hamstrings','glutes','core'], equipment: ['bodyweight','dumbbell'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Sumo Deadlift', family: 'hinge', muscles: ['glutes','adductors','back'], equipment: ['barbell'], type: 'reps', sets: 4, reps: 6 },
+      { name: 'Trap Bar Deadlift', family: 'hinge', muscles: ['quads','glutes','back'], equipment: ['trap bar'], type: 'reps', sets: 4, reps: 6 },
+      { name: 'Kettlebell Swing', family: 'hinge', muscles: ['glutes','hamstrings','back'], equipment: ['kettlebell'], type: 'reps', sets: 4, reps: 15 },
+      { name: 'Good Morning', family: 'hinge', muscles: ['hamstrings','back'], equipment: ['barbell'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Glute Bridge', family: 'glute_bridge', muscles: ['glutes','hamstrings'], equipment: ['bodyweight','barbell'], type: 'reps', sets: 3, reps: 15 },
+      { name: 'Hip Thrust', family: 'glute_bridge', muscles: ['glutes'], equipment: ['barbell','bench'], type: 'reps', sets: 3, reps: 12 },
+      { name: 'Single-leg Hip Thrust', family: 'glute_bridge', muscles: ['glutes'], equipment: ['bodyweight','bench'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Single-leg Glute Bridge', family: 'glute_bridge', muscles: ['glutes'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Banded Glute Bridge', family: 'glute_bridge', muscles: ['glutes'], equipment: ['band'], type: 'reps', sets: 3, reps: 15 },
+
+      // STEP-UP FAMILY
+      { name: 'Step-up', family: 'step_up', muscles: ['quads','glutes'], equipment: ['box','dumbbell'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Lateral Step-up', family: 'step_up', muscles: ['glutes','quads'], equipment: ['box'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Step-up with Knee Drive', family: 'step_up', muscles: ['glutes','quads','core'], equipment: ['box'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Crossover Step-up', family: 'step_up', muscles: ['glutes','adductors'], equipment: ['box'], type: 'reps', sets: 3, reps: 10 },
+
+      // HIP STABILITY
+      { name: 'Clamshell', family: 'clamshell', muscles: ['glutes','hip_abductors'], equipment: ['bodyweight','band'], type: 'reps', sets: 2, reps: 15 },
+      { name: 'Side-lying Leg Raise', family: 'hip_ab', muscles: ['hip_abductors'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 15 },
+      { name: 'Banded Lateral Walk', family: 'hip_ab', muscles: ['glutes','hip_abductors'], equipment: ['band'], type: 'reps', sets: 3, reps: 12 },
+      { name: 'Banded Forward Walk', family: 'hip_ab', muscles: ['glutes'], equipment: ['band'], type: 'reps', sets: 3, reps: 12 },
+      { name: 'Fire Hydrant', family: 'hip_ab', muscles: ['glutes','hip_abductors'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 15 },
+      { name: 'Donkey Kick', family: 'glute_iso', muscles: ['glutes'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 15 },
+      { name: 'Side Plank with Leg Lift', family: 'side_plank', muscles: ['obliques','hip_abductors','glutes'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Hip Airplane', family: 'single_leg_stability', muscles: ['glutes','hamstrings','core'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 8 },
+      { name: 'Standing Hip Abduction', family: 'hip_ab', muscles: ['hip_abductors'], equipment: ['band','bodyweight'], type: 'reps', sets: 2, reps: 15 },
+      { name: 'Copenhagen Plank', family: 'side_plank', muscles: ['adductors','core'], equipment: ['bench'], type: 'duration', sets: 3, reps: 20 },
+      { name: '90-90 Hip Rotation', family: 'mobility', muscles: ['hips'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 10 },
+
+      // SINGLE-LEG STABILITY
+      { name: 'Single-leg Balance', family: 'single_leg_stability', muscles: ['ankle','core'], equipment: ['bodyweight'], type: 'duration', sets: 3, reps: 30 },
+      { name: 'Single-leg Balance (Eyes Closed)', family: 'single_leg_stability', muscles: ['ankle','core'], equipment: ['bodyweight'], type: 'duration', sets: 3, reps: 20 },
+      { name: 'Single-leg Squat to Box', family: 'single_leg_stability', muscles: ['quads','glutes','core'], equipment: ['box'], type: 'reps', sets: 3, reps: 6 },
+      { name: 'Pistol Squat to Box', family: 'single_leg_stability', muscles: ['quads','glutes','core'], equipment: ['box'], type: 'reps', sets: 3, reps: 5 },
+      { name: 'Y-Balance Reach', family: 'single_leg_stability', muscles: ['core','hips'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 8 },
+      { name: 'Single-leg Hop and Hold', family: 'single_leg_stability', muscles: ['glutes','calves'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 6 },
+      { name: 'Single-leg Lateral Hop', family: 'single_leg_stability', muscles: ['glutes','adductors'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 8 },
+
+      // CORE
+      { name: 'Plank', family: 'plank', muscles: ['core'], equipment: ['bodyweight'], type: 'duration', sets: 3, reps: 45 },
+      { name: 'Side Plank', family: 'side_plank', muscles: ['obliques','core'], equipment: ['bodyweight'], type: 'duration', sets: 3, reps: 30 },
+      { name: 'Plank with Shoulder Taps', family: 'plank', muscles: ['core','shoulders'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 20 },
+      { name: 'Dead Bug', family: 'core_iso', muscles: ['core'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Bird Dog', family: 'core_iso', muscles: ['core','glutes','back'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Hollow Hold', family: 'core_iso', muscles: ['core'], equipment: ['bodyweight'], type: 'duration', sets: 3, reps: 30 },
+      { name: 'Pallof Press', family: 'core_iso', muscles: ['core','obliques'], equipment: ['band','cable'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Russian Twist', family: 'core_dynamic', muscles: ['obliques','core'], equipment: ['bodyweight','dumbbell'], type: 'reps', sets: 3, reps: 20 },
+      { name: 'Bicycle Crunch', family: 'core_dynamic', muscles: ['core','obliques'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 20 },
+      { name: 'Mountain Climbers', family: 'core_dynamic', muscles: ['core','hip_flexors'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 30 },
+      { name: 'Ab Wheel Rollout', family: 'core_dynamic', muscles: ['core'], equipment: ['ab wheel'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Hanging Leg Raise', family: 'core_dynamic', muscles: ['core','hip_flexors'], equipment: ['bar'], type: 'reps', sets: 3, reps: 8 },
+
+      // CALF / LOWER LEG
+      { name: 'Standing Calf Raise', family: 'calf_raise', muscles: ['calves'], equipment: ['bodyweight','dumbbell'], type: 'reps', sets: 3, reps: 15 },
+      { name: 'Seated Calf Raise', family: 'calf_raise', muscles: ['calves'], equipment: ['dumbbell'], type: 'reps', sets: 3, reps: 15 },
+      { name: 'Single-leg Calf Raise', family: 'calf_raise', muscles: ['calves'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 12 },
+      { name: 'Calf Raise off Step', family: 'calf_raise', muscles: ['calves'], equipment: ['step'], type: 'reps', sets: 3, reps: 15 },
+      { name: 'Tibialis Raise', family: 'calf_raise', muscles: ['tibialis'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 15 },
+      { name: 'Eccentric Heel Drop', family: 'calf_raise', muscles: ['calves'], equipment: ['step'], type: 'reps', sets: 3, reps: 12 },
+
+      // UPPER PULL
+      { name: 'Pull-up', family: 'pull_up', muscles: ['back','biceps'], equipment: ['bar'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Chin-up', family: 'pull_up', muscles: ['biceps','back'], equipment: ['bar'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Inverted Row', family: 'row', muscles: ['back','biceps'], equipment: ['bar'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Bent-over Row (Barbell)', family: 'row', muscles: ['back','biceps'], equipment: ['barbell'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Single-arm Dumbbell Row', family: 'row', muscles: ['back','biceps'], equipment: ['dumbbell','bench'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Renegade Row', family: 'row', muscles: ['back','core','biceps'], equipment: ['dumbbell'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Band Pull-apart', family: 'rear_delt', muscles: ['rear_delts','back'], equipment: ['band'], type: 'reps', sets: 3, reps: 15 },
+      { name: 'Face Pull', family: 'rear_delt', muscles: ['rear_delts','back'], equipment: ['cable','band'], type: 'reps', sets: 3, reps: 12 },
+
+      // UPPER PUSH
+      { name: 'Dumbbell Shoulder Press', family: 'press', muscles: ['shoulders','triceps'], equipment: ['dumbbell'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Barbell Overhead Press', family: 'press', muscles: ['shoulders','triceps'], equipment: ['barbell'], type: 'reps', sets: 4, reps: 6 },
+      { name: 'Dumbbell Bench Press', family: 'bench_press', muscles: ['chest','triceps'], equipment: ['dumbbell','bench'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Incline Dumbbell Press', family: 'bench_press', muscles: ['chest','shoulders'], equipment: ['dumbbell','bench'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Dip', family: 'press', muscles: ['triceps','chest'], equipment: ['bar'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Lateral Raise', family: 'lateral_raise', muscles: ['shoulders'], equipment: ['dumbbell'], type: 'reps', sets: 3, reps: 12 },
+      { name: 'Front Raise', family: 'lateral_raise', muscles: ['shoulders'], equipment: ['dumbbell'], type: 'reps', sets: 3, reps: 12 },
+
+      // MOBILITY / WARM-UP
+      { name: 'Cat-Cow', family: 'mobility', muscles: ['spine'], equipment: ['bodyweight'], type: 'reps', sets: 1, reps: 10 },
+      { name: "World's Greatest Stretch", family: 'mobility', muscles: ['hips','spine'], equipment: ['bodyweight'], type: 'reps', sets: 1, reps: 6 },
+      { name: 'Inchworm', family: 'mobility', muscles: ['hamstrings','core'], equipment: ['bodyweight'], type: 'reps', sets: 1, reps: 6 },
+      { name: 'Hip Circles', family: 'mobility', muscles: ['hips'], equipment: ['bodyweight'], type: 'reps', sets: 1, reps: 10 },
+      { name: 'Leg Swings (Front-Back)', family: 'mobility', muscles: ['hip_flexors'], equipment: ['bodyweight'], type: 'reps', sets: 1, reps: 10 },
+      { name: 'Leg Swings (Side-Side)', family: 'mobility', muscles: ['adductors'], equipment: ['bodyweight'], type: 'reps', sets: 1, reps: 10 },
+      { name: 'T-spine Rotation', family: 'mobility', muscles: ['spine'], equipment: ['bodyweight'], type: 'reps', sets: 1, reps: 8 },
+
+      // RUNNING DRILLS
+      { name: 'A-Skip', family: 'running_drill', muscles: ['hip_flexors','calves'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 20 },
+      { name: 'B-Skip', family: 'running_drill', muscles: ['hip_flexors','hamstrings'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 20 },
+      { name: 'High Knees', family: 'running_drill', muscles: ['hip_flexors','calves'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 30 },
+      { name: 'Butt Kicks', family: 'running_drill', muscles: ['hamstrings'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 30 },
+      { name: 'Carioca', family: 'running_drill', muscles: ['hips'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 20 },
+      { name: 'Bounding', family: 'running_drill', muscles: ['glutes','calves'], equipment: ['bodyweight'], type: 'reps', sets: 2, reps: 10 },
+      { name: 'Strides', family: 'running_drill', muscles: ['legs'], equipment: ['bodyweight'], type: 'reps', sets: 4, reps: 1 },
+      { name: 'Pogo Hops', family: 'running_drill', muscles: ['calves','ankle'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 15 },
+
+      // PLYO
+      { name: 'Box Jump', family: 'plyo', muscles: ['quads','glutes','calves'], equipment: ['box'], type: 'reps', sets: 3, reps: 5 },
+      { name: 'Broad Jump', family: 'plyo', muscles: ['glutes','quads'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 5 },
+      { name: 'Lateral Bound', family: 'plyo', muscles: ['glutes','adductors'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Tuck Jump', family: 'plyo', muscles: ['quads','core'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Skater Jump', family: 'plyo', muscles: ['glutes','adductors'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Plyo Lunge', family: 'plyo', muscles: ['quads','glutes'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 8 },
+      { name: 'Burpee', family: 'plyo', muscles: ['full body'], equipment: ['bodyweight'], type: 'reps', sets: 3, reps: 10 },
+      { name: 'Jump Rope', family: 'plyo', muscles: ['calves'], equipment: ['rope'], type: 'duration', sets: 3, reps: 60 }
+    ];
+
+    // ============================================
+    // DEXIE DATABASE
+    // ============================================
+    const db = new Dexie('RunRoutine');
+    db.version(1).stores({
+      categories: '++id, name, position',
+      exercises: '++id, categoryId, name, libraryName, addedAt',
+      schedule: '++id, &dayOfWeek',
+      overrides: '++id, &date',
+      sessions: '++id, date, categoryId',
+      settings: '&key'
+    });
+
+    // ============================================
+    // ALPINE.JS APP COMPONENT
+    // ============================================
+    function runRoutineApp() {
+      return {
+        tab: 'today',
+        categories: [],
+        exercises: [],
+        schedule: [],   // [{dayOfWeek, categoryId}]
+        overrides: [],  // [{date, categoryId}]
+        sessions: [],   // [{date, categoryId, displayedExerciseIds}]
+        todayExercises: [],
+        todayCategory: null,
+        dayNames: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+        modal: { kind: null, exercise: {}, category: {}, override: {}, suggestions: [] },
+        toast: { show: false, msg: '' },
+
+        // ---- INIT ----
+        _initStarted: false,
+        async init() {
+          // Guard against double-init (Alpine sometimes calls init twice in dev)
+          if (this._initStarted) return;
+          this._initStarted = true;
+          await this.bootstrap();
+          await this.dedupeCategories();
+          await this.refreshData();
+          await this.computeToday();
+
+          // Register service worker
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW registration failed:', e));
+          }
+        },
+
+        async bootstrap() {
+          // Use settings flag to ensure bootstrap only runs once ever
+          const flag = await db.settings.where('key').equals('bootstrapped').first();
+          if (flag) return;
+
+          const catCount = await db.categories.count();
+          if (catCount === 0) {
+            await db.categories.bulkAdd([
+              { name: 'Daily',  position: 1, exercisesPerSession: 5 },
+              { name: 'Gym A',  position: 2, exercisesPerSession: 6 },
+              { name: 'Gym B',  position: 3, exercisesPerSession: 6 },
+              { name: 'Rest',   position: 4, exercisesPerSession: 2 }
+            ]);
+          }
+
+          const schedCount = await db.schedule.count();
+          if (schedCount === 0) {
+            const cats = await db.categories.toArray();
+            const daily = cats.find(c => c.name === 'Daily');
+            const gymA  = cats.find(c => c.name === 'Gym A');
+            const gymB  = cats.find(c => c.name === 'Gym B');
+            const rest  = cats.find(c => c.name === 'Rest');
+            await db.schedule.bulkAdd([
+              { dayOfWeek: 0, categoryId: rest?.id ?? null },
+              { dayOfWeek: 1, categoryId: daily?.id ?? null },
+              { dayOfWeek: 2, categoryId: gymA?.id ?? null },
+              { dayOfWeek: 3, categoryId: daily?.id ?? null },
+              { dayOfWeek: 4, categoryId: gymB?.id ?? null },
+              { dayOfWeek: 5, categoryId: daily?.id ?? null },
+              { dayOfWeek: 6, categoryId: rest?.id ?? null }
+            ]);
+          }
+
+          await db.settings.put({ key: 'bootstrapped', value: true });
+        },
+
+        async dedupeCategories() {
+          // Self-healing migration: remove duplicate categories created by the
+          // double-init bug in earlier builds. Keeps the oldest of each name and
+          // re-points any exercises/schedule/overrides pointing at duplicates.
+          const cats = await db.categories.toArray();
+          const seen = new Map();
+          const toDelete = [];
+          for (const c of cats.sort((a,b) => a.id - b.id)) {
+            const key = (c.name || '').toLowerCase().trim();
+            if (!key) continue;
+            if (seen.has(key)) {
+              const keep = seen.get(key);
+              await db.exercises.where('categoryId').equals(c.id).modify({ categoryId: keep.id });
+              await db.schedule.where('categoryId').equals(c.id).modify({ categoryId: keep.id });
+              await db.overrides.where('categoryId').equals(c.id).modify({ categoryId: keep.id });
+              await db.sessions.where('categoryId').equals(c.id).delete();
+              toDelete.push(c.id);
+            } else {
+              seen.set(key, c);
+            }
+          }
+          for (const id of toDelete) {
+            await db.categories.delete(id);
+          }
+          if (toDelete.length > 0) {
+            console.log('Removed ' + toDelete.length + ' duplicate categories.');
+          }
+        },
+
+        async refreshData() {
+          this.categories = (await db.categories.orderBy('position').toArray());
+          this.exercises = await db.exercises.toArray();
+          this.schedule = await db.schedule.toArray();
+          this.overrides = await db.overrides.toArray();
+          this.sessions = await db.sessions.toArray();
+        },
+
+        // ---- DATE HELPERS ----
+        todayString() {
+          const d = new Date();
+          return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        },
+        todayDayOfWeek() { return new Date().getDay(); },
+        formatDateLong(d) {
+          return d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        },
+
+        // ---- SCHEDULE ----
+        getScheduleForDay(dow) {
+          const entry = this.schedule.find(s => s.dayOfWeek === dow);
+          return entry?.categoryId ?? '';
+        },
+        async setScheduleForDay(dow, value) {
+          const categoryId = value === '' ? null : parseInt(value);
+          const existing = await db.schedule.where('dayOfWeek').equals(dow).first();
+          if (existing) {
+            await db.schedule.update(existing.id, { categoryId });
+          } else {
+            await db.schedule.add({ dayOfWeek: dow, categoryId });
+          }
+          await this.refreshData();
+          await this.computeToday();
+          this.showToast('Schedule updated');
+        },
+
+        // ---- TODAY ----
+        async computeToday() {
+          const today = this.todayString();
+          const dow = this.todayDayOfWeek();
+
+          // Check for override first
+          const override = this.overrides.find(o => o.date === today);
+          let categoryId;
+          if (override) {
+            categoryId = override.categoryId;
+          } else {
+            const entry = this.schedule.find(s => s.dayOfWeek === dow);
+            categoryId = entry?.categoryId ?? null;
+          }
+
+          if (!categoryId) {
+            this.todayCategory = null;
+            this.todayExercises = [];
+            return;
+          }
+
+          this.todayCategory = this.categories.find(c => c.id === categoryId);
+          if (!this.todayCategory) {
+            this.todayExercises = [];
+            return;
+          }
+
+          // Check if we already generated today's session
+          let session = await db.sessions.where({ date: today, categoryId }).first();
+          if (!session) {
+            const exerciseIds = this.pickRotation(categoryId, this.todayCategory.exercisesPerSession || 5);
+            session = { date: today, categoryId, displayedExerciseIds: exerciseIds };
+            await db.sessions.add(session);
+            this.sessions = await db.sessions.toArray();
+          }
+
+          // Resolve exercise objects
+          this.todayExercises = session.displayedExerciseIds
+            .map(id => this.exercises.find(e => e.id === id))
+            .filter(Boolean);
+        },
+
+        pickRotation(categoryId, n) {
+          const pool = this.exercises.filter(e => e.categoryId === categoryId);
+          if (pool.length === 0) return [];
+          if (pool.length <= n) return pool.map(e => e.id);
+
+          // Get past sessions for this category (most recent first)
+          const past = this.sessions
+            .filter(s => s.categoryId === categoryId)
+            .sort((a,b) => b.date.localeCompare(a.date))
+            .slice(0, Math.max(1, Math.floor(pool.length / n)));
+
+          // Score: lower score = more recently shown
+          const score = new Map();
+          pool.forEach(e => score.set(e.id, 0));
+          past.forEach((s, idx) => {
+            s.displayedExerciseIds.forEach(id => {
+              const current = score.get(id) ?? 0;
+              // More recent past sessions penalize more
+              score.set(id, current + (past.length - idx));
+            });
+          });
+
+          // Sort by score ascending (least recently shown first), tiebreak with random
+          const ordered = [...pool].sort((a,b) => {
+            const sa = score.get(a.id) ?? 0;
+            const sb = score.get(b.id) ?? 0;
+            if (sa !== sb) return sa - sb;
+            return Math.random() - 0.5;
+          });
+
+          return ordered.slice(0, n).map(e => e.id);
+        },
+
+        todayCategoryName() {
+          return this.todayCategory ? this.todayCategory.name : 'Rest Day';
+        },
+
+        // ---- OVERRIDE ----
+        openOverrideModal() {
+          const today = this.todayString();
+          const existing = this.overrides.find(o => o.date === today);
+          this.modal = {
+            kind: 'override',
+            override: {
+              categoryId: existing ? existing.categoryId : (this.todayCategory?.id ?? null)
+            }
+          };
+        },
+        async saveOverride() {
+          const today = this.todayString();
+          const existing = await db.overrides.where('date').equals(today).first();
+          const categoryId = this.modal.override.categoryId;
+          if (existing) {
+            await db.overrides.update(existing.id, { categoryId });
+          } else {
+            await db.overrides.add({ date: today, categoryId });
+          }
+          // Clear any pre-existing session for today (since category changed)
+          await db.sessions.where('date').equals(today).delete();
+          await this.refreshData();
+          await this.computeToday();
+          this.closeModal();
+          this.showToast('Today overridden');
+        },
+        async clearOverride() {
+          const today = this.todayString();
+          await db.overrides.where('date').equals(today).delete();
+          await db.sessions.where('date').equals(today).delete();
+          await this.refreshData();
+          await this.computeToday();
+          this.closeModal();
+          this.showToast('Override cleared');
+        },
+
+        // ---- EXERCISES ----
+        exercisesInCategory(categoryId) {
+          return this.exercises.filter(e => e.categoryId === categoryId);
+        },
+        formatPrescription(ex) {
+          if (!ex) return '';
+          const sets = ex.prescribedSets ?? '';
+          const reps = ex.prescribedReps ?? '';
+          const wt = ex.prescribedWeight;
+          if (ex.type === 'duration') {
+            return `${sets} × ${reps} sec`;
+          }
+          let s = `${sets} × ${reps}`;
+          if (wt !== undefined && wt !== null && wt !== '' && wt !== 0 && !isNaN(parseFloat(wt))) {
+            s += ` @ ${wt} lbs`;
+          }
+          return s;
+        },
+
+        openAddExerciseModal() {
+          if (this.categories.length === 0) {
+            this.showToast('Add a category first in Settings');
+            return;
+          }
+          this.modal = {
+            kind: 'exercise',
+            exercise: {
+              name: '',
+              categoryId: this.categories[0].id,
+              type: 'reps',
+              prescribedSets: 3,
+              prescribedReps: 10,
+              prescribedWeight: '',
+              notes: '',
+              libraryName: null
+            },
+            suggestions: []
+          };
+        },
+        openEditExerciseModal(ex) {
+          this.modal = {
+            kind: 'exercise',
+            exercise: { ...ex },
+            suggestions: []
+          };
+        },
+        onExerciseNameInput() {
+          // When editing an existing exercise, don't auto-fill or suggest
+          // (don't want to clobber the user's stored values).
+          if (this.modal.exercise.id) { this.modal.suggestions = []; return; }
+
+          const name = (this.modal.exercise.name || '').trim().toLowerCase();
+          if (!name) { this.modal.suggestions = []; return; }
+
+          // Find exact match first
+          let match = LIBRARY.find(l => l.name.toLowerCase() === name);
+          if (!match) {
+            match = LIBRARY.find(l => l.name.toLowerCase().includes(name) || name.includes(l.name.toLowerCase()));
+          }
+          if (!match) { this.modal.suggestions = []; return; }
+
+          // Auto-fill defaults from library on exact match (add-mode only)
+          if (match.name.toLowerCase() === name) {
+            this.modal.exercise.type = match.type;
+            this.modal.exercise.prescribedSets = match.sets;
+            this.modal.exercise.prescribedReps = match.reps;
+            this.modal.exercise.libraryName = match.name;
+            this.modal.exercise.muscleGroups = match.muscles;
+            this.modal.exercise.equipment = match.equipment;
+            this.modal.exercise.variationFamily = match.family;
+          }
+
+          // Suggest siblings from same family
+          const family = match.family;
+          const existingNames = new Set(this.exercises
+            .filter(e => e.categoryId === this.modal.exercise.categoryId)
+            .map(e => e.name.toLowerCase()));
+          existingNames.add(match.name.toLowerCase());
+
+          this.modal.suggestions = LIBRARY
+            .filter(l => l.family === family && !existingNames.has(l.name.toLowerCase()))
+            .slice(0, 6)
+            .map(l => ({ ...l, added: false }));
+        },
+        async addSuggestion(idx) {
+          const s = this.modal.suggestions[idx];
+          if (s.added) return;
+          const categoryId = this.modal.exercise.categoryId;
+          await db.exercises.add({
+            name: s.name,
+            categoryId,
+            type: s.type,
+            prescribedSets: s.sets,
+            prescribedReps: s.reps,
+            prescribedWeight: '',
+            notes: '',
+            libraryName: s.name,
+            muscleGroups: s.muscles,
+            equipment: s.equipment,
+            variationFamily: s.family,
+            addedAt: Date.now()
+          });
+          this.modal.suggestions[idx].added = true;
+          await this.invalidateTodaySessionForCategory(categoryId);
+          await this.refreshData();
+          await this.computeToday();
+        },
+        async invalidateTodaySessionForCategory(categoryId) {
+          // Drop today's cached session if it's for this category, so it regenerates
+          // with the new exercise pool on next computeToday.
+          if (!categoryId) return;
+          const today = this.todayString();
+          await db.sessions.where({ date: today, categoryId }).delete();
+        },
+        async saveExercise() {
+          const ex = this.modal.exercise;
+          if (!ex.name || !ex.name.trim()) {
+            this.showToast('Enter a name');
+            return;
+          }
+          const catId = typeof ex.categoryId === 'string' ? parseInt(ex.categoryId) : ex.categoryId;
+          if (!catId || isNaN(catId)) {
+            this.showToast('Pick a category');
+            return;
+          }
+
+          // Build an explicit DB record (no Alpine proxies, no rogue fields)
+          const record = {
+            name: ex.name.trim(),
+            categoryId: catId,
+            type: ex.type === 'duration' ? 'duration' : 'reps',
+            prescribedSets: Number(ex.prescribedSets) || 3,
+            prescribedReps: Number(ex.prescribedReps) || 10,
+            prescribedWeight: (ex.prescribedWeight === '' || ex.prescribedWeight === null || ex.prescribedWeight === undefined) ? '' : String(ex.prescribedWeight),
+            notes: ex.notes ? String(ex.notes) : '',
+            libraryName: ex.libraryName || null,
+            muscleGroups: Array.isArray(ex.muscleGroups) ? [...ex.muscleGroups] : [],
+            equipment: Array.isArray(ex.equipment) ? [...ex.equipment] : [],
+            variationFamily: ex.variationFamily || null
+          };
+
+          try {
+            if (ex.id) {
+              await db.exercises.update(ex.id, record);
+              this.showToast('Exercise updated');
+            } else {
+              record.addedAt = Date.now();
+              await db.exercises.add(record);
+              this.showToast('Exercise added');
+            }
+            await this.invalidateTodaySessionForCategory(catId);
+            await this.refreshData();
+            await this.computeToday();
+            this.closeModal();
+          } catch (e) {
+            console.error('Save failed:', e);
+            this.showToast('Save failed: ' + (e.message || 'unknown error'));
+          }
+        },
+        async confirmDeleteExercise(ex) {
+          if (!confirm(`Delete "${ex.name}"?`)) return;
+          await db.exercises.delete(ex.id);
+          await this.invalidateTodaySessionForCategory(ex.categoryId);
+          await this.refreshData();
+          await this.computeToday();
+          this.showToast('Deleted');
+        },
+
+        // ---- CATEGORIES ----
+        openAddCategoryModal() {
+          this.modal = {
+            kind: 'category',
+            category: { name: '', exercisesPerSession: 5 }
+          };
+        },
+        async saveCategory() {
+          const c = this.modal.category;
+          if (!c.name || !c.name.trim()) {
+            this.showToast('Enter a name');
+            return;
+          }
+          const maxPos = this.categories.length > 0 ? Math.max(...this.categories.map(c => c.position || 0)) : 0;
+          await db.categories.add({
+            name: c.name.trim(),
+            position: maxPos + 1,
+            exercisesPerSession: c.exercisesPerSession || 5
+          });
+          await this.refreshData();
+          this.closeModal();
+          this.showToast('Category added');
+        },
+        async updateCategoryName(id, name) {
+          if (!name || !name.trim()) return;
+          await db.categories.update(id, { name: name.trim() });
+          await this.refreshData();
+          await this.computeToday();
+        },
+        async updateCategoryExCount(id, count) {
+          if (!count || count < 1) count = 1;
+          await db.categories.update(id, { exercisesPerSession: count });
+          await this.refreshData();
+        },
+        async confirmDeleteCategory(cat) {
+          const exCount = this.exercisesInCategory(cat.id).length;
+          const msg = exCount > 0
+            ? `Delete "${cat.name}"? ${exCount} exercise${exCount===1?'':'s'} will also be deleted.`
+            : `Delete "${cat.name}"?`;
+          if (!confirm(msg)) return;
+          await db.exercises.where('categoryId').equals(cat.id).delete();
+          await db.schedule.where('categoryId').equals(cat.id).modify({ categoryId: null });
+          await db.overrides.where('categoryId').equals(cat.id).modify({ categoryId: null });
+          await db.sessions.where('categoryId').equals(cat.id).delete();
+          await db.categories.delete(cat.id);
+          await this.refreshData();
+          await this.computeToday();
+          this.showToast('Category deleted');
+        },
+
+        // ---- EXPORT / IMPORT ----
+        async exportData() {
+          const data = {
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            app: 'RunRoutine',
+            categories: await db.categories.toArray(),
+            exercises: await db.exercises.toArray(),
+            schedule: await db.schedule.toArray(),
+            overrides: await db.overrides.toArray(),
+            sessions: await db.sessions.toArray(),
+            settings: await db.settings.toArray()
+          };
+          const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `runroutine-backup-${this.todayString()}.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          this.showToast('Backup downloaded');
+        },
+        async importData(event) {
+          const file = event.target.files[0];
+          if (!file) return;
+          if (!confirm('Import will REPLACE all current data. Continue?')) {
+            event.target.value = '';
+            return;
+          }
+          try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            if (data.app !== 'RunRoutine') {
+              throw new Error('Not a RunRoutine backup file');
+            }
+            await db.transaction('rw', db.categories, db.exercises, db.schedule, db.overrides, db.sessions, db.settings, async () => {
+              await db.categories.clear();
+              await db.exercises.clear();
+              await db.schedule.clear();
+              await db.overrides.clear();
+              await db.sessions.clear();
+              await db.settings.clear();
+              if (data.categories) await db.categories.bulkAdd(data.categories);
+              if (data.exercises) await db.exercises.bulkAdd(data.exercises);
+              if (data.schedule) await db.schedule.bulkAdd(data.schedule);
+              if (data.overrides) await db.overrides.bulkAdd(data.overrides);
+              if (data.sessions) await db.sessions.bulkAdd(data.sessions);
+              if (data.settings) await db.settings.bulkAdd(data.settings);
+            });
+            await this.refreshData();
+            await this.computeToday();
+            this.showToast('Imported successfully');
+          } catch (e) {
+            alert('Import failed: ' + e.message);
+          }
+          event.target.value = '';
+        },
+
+        async confirmReset() {
+          if (!confirm('Reset ALL data? This cannot be undone.')) return;
+          if (!confirm('Last chance — truly delete everything?')) return;
+          await db.delete();
+          location.reload();
+        },
+
+        // ---- MODAL / UI HELPERS ----
+        closeModal() {
+          this.modal = { kind: null, exercise: {}, category: {}, override: {}, suggestions: [] };
+        },
+        showToast(msg) {
+          this.toast = { show: true, msg };
+          setTimeout(() => { this.toast.show = false; }, 2000);
+        }
+      };
+    }
+  </script>
+</body>
+</html>
